@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package videoplay;
+
+//! Sending the transcoded video stream
+//! to a client
+message ToClient {
+    bool lol = 1;
+}
+
+message FromClient {
+    bool lol = 1;
+}
