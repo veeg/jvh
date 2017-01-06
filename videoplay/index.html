@@ -4,12 +4,17 @@
   </head>
   <body>
 
-    <input type="file" id="file-input" />
     <section>
-      <video controls autoplay width="320" height="240"></video>
-      <pre id="log"></pre>
+      <video id="demo-video" controls autoplay width="320" height="240"></video>
     </section>
 
   </body>
-  <script type="text/javascript" src="videostream.js"></script>
+
+  <script type="text/javascript" src="google-protobuf.js"></script>
+  <script type="text/javascript" src="videostreampb.js"></script>
+  <script type="text/javascript" src="proto-videostream.js"></script>
+  <script>
+    var video = new ProtoVideoStream("#demo-video");
+    video.connectWebSocket("localhost", 8001);
+  </script>
 </html>
