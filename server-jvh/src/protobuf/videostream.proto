@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package videostream;
+
+message Payload {
+    repeated bytes payload = 1;
+}
+
+message StreamEntries {
+    repeated StreamEntry entries = 1;
+}
+
+message StreamEntry {
+    string name = 1;
+    string format = 2;
+    string codec = 3;
+}
+
+//! Sending the transcoded video stream
+//! to a client
+message ToClient {
+    // TODO: Add status enum
+
+    oneof msg {
+        Payload payload = 1;
+        StreamEntries stream_entries = 2;
+    }
+}
+
+message FromClient {
+    oneof msg {
+        bool ping = 1;
+        bool request_stream_entries = 2;
+        string select_stream_entry = 3;
+    }
+}
+

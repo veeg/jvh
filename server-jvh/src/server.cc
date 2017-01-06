@@ -167,21 +167,20 @@ Server::handle_incoming_feed (void *context)
 {
     VidListen_t *v = (VidListen_t*)context;
 
-    videofeed::FromFeed message;
-    while (1)
-    {
-        message.ParseFromFileDescriptor(v->fd);
-    }
+    //videofeed::FromFeed message;
+    //while (1)
+    //{
+    //    message.ParseFromFileDescriptor(v->fd);
+    //}
 }
 
 bool
 Server::on_new_websocket_client (const Glib::IOCondition)
 {
-    std::cerr << "New websocket client connected."
-                      << std::endl;
+    std::cerr << "New websocket client connected." << std::endl;
 
     noPollConn *ws = nopoll_conn_accept (m_nopoll_context, m_nopoll_listener);
-    Client *client = new Client (ws);
+    Client *client = new Client (this, ws);
 
     client->signal_disconnected ().connect
         (sigc::mem_fun (*this, &Server::on_disconnect_websocket_client));
@@ -205,7 +204,7 @@ Server::get_clientids ()
 }
 
 int
-Server::send_message (client id, videoplay::ToClient m)
+Server::send_message (client id, videostream::ToClient m)
 {
 
 }
@@ -231,4 +230,24 @@ Server::add_client(Client *client)
     pthread_mutex_lock (&m_client_mutex);
     m_clients.push_back (client);
     pthread_mutex_unlock (&m_client_mutex);
+}
+
+void
+Server::register_stream_entry_file (std::string name, std::string filepath,
+                                    std::string format, std::string codec)
+{
+    struct stream_entry *entry = new stream_entry;
+
+    entry->se_name = name;
+    entry->se_filepath = filepath;
+    entry->se_format = format;
+    entry->se_codec = codec;
+
+    m_stream_entries[name] = entry;
+}
+
+const std::map<std::string, struct stream_entry *>
+Server::stream_entries ()
+{
+    return m_stream_entries;
 }

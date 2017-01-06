@@ -1,5 +1,7 @@
 
-file (GLOB proto_source protobuf/*.proto)
+
+#  Create all protobuf files
+file (GLOB proto_source ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/*.proto)
 set (pcode)
 set (pheaders)
 foreach (protofile ${proto_source})
@@ -8,32 +10,33 @@ foreach (protofile ${proto_source})
     set (pheaders ${pheaders} ${CMAKE_BINARY_DIR}/protobuf/${proto}.pb.h)
 endforeach(protofile)
 
+# The protocol buffer compiler binary
 set (PROTOC_BIN protoc)
 
-add_custom_command(
-    OUTPUT ${pcode} ${pheaders}
+add_custom_command (
+  OUTPUT ${pcode} ${pheaders} ${CMAKE_BINARY_DIR}/protobuf/videostreampb.js
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/protobuf
     COMMAND ${PROTOC_BIN}
     --proto_path=${CMAKE_CURRENT_SOURCE_DIR}/protobuf
     --cpp_out=${CMAKE_BINARY_DIR}/protobuf
-    --js_out=binary:${CMAKE_BINARY_DIR}/protobuf
+    --js_out=library=videostreampb,binary:${CMAKE_BINARY_DIR}/protobuf
     ${proto_source}
     DEPENDS ${proto_source}
     COMMENT "Generating code from proto files"
 )
 add_custom_target(protoc ALL DEPENDS ${pcode} ${pheaders})
 
-add_executable (videoservice
+
+add_executable (videostream
     server.cc
-    video_source_comm.cc
+    #video_source_comm.cc
     client.cc
     main.cc
-    encode.cc
-    ${CMAKE_BINARY_DIR}/protobuf/videofeed.pb.cc
-    ${CMAKE_BINARY_DIR}/protobuf/videoplay.pb.cc
+    #encode.cc
+    ${CMAKE_BINARY_DIR}/protobuf/videostream.pb.cc
 )
 
-target_include_directories (videoservice PRIVATE
+target_include_directories (videostream PRIVATE
     ${CMAKE_BINARY_DIR}/protobuf/
     ${CMAKE_CURRENT_SOURCE_DIR}/private_include/
     ${GTKMM_INCLUDE_DIRS}
@@ -43,11 +46,12 @@ target_include_directories (videoservice PRIVATE
     ${SIGC++_INCLUDE_DIRS}
 )
 
-target_link_libraries (videoservice
+target_link_libraries (videostream
     ${GTKMM_LIBRARIES}
     ${NOPOLL_LIBRARIES}
     ${FFMPEG_LIBRARIES}
     ${PROTOBUF_LIBRARIES}
     ${SIGC++_LIBRARIES}
 )
-add_dependencies (videoservice protoc)
+
+add_dependencies (videostream protoc)

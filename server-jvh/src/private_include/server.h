@@ -4,14 +4,25 @@
 #include <nopoll.h>
 #include <list>
 #include <memory>
+#include <map>
 #include <glibmm/main.h>
-#include "videoplay.pb.h"
+#include "videostream.pb.h"
 #include "client.h"
-#include "videofeed.pb.h"
 
 namespace jvh
 {
+    // XXX ??? Dont do this
     typedef int client;
+
+    //! Structure holds a single entry that is streamable to clients
+    struct stream_entry {
+        std::string se_name;
+        //! If the streaming entry is a file, this filepath is the location of said file
+        std::string se_filepath;
+        std::string se_format;
+        std::string se_codec;
+    };
+
     class Server
     {
     public:
@@ -26,10 +37,12 @@ namespace jvh
         // a message
         std::list<client> get_clientids();
         //! Send a protobuff message to the client on id id
-        int send_message(client id, videoplay::ToClient m);
+        int send_message(client id, videostream::ToClient m);
 
+        void register_stream_entry_file (std::string name, std::string filepath,
+                                         std::string format, std::string codec);
 
-
+        const std::map<std::string, struct stream_entry *> stream_entries();
     private:
         Glib::RefPtr<Glib::MainLoop> m_mainloop;
 
@@ -41,6 +54,7 @@ namespace jvh
         int m_stream_listen_fd = -1;
         pthread_t m_handler_tid;
         pthread_mutex_t m_client_mutex;
+        std::map<std::string, struct stream_entry *> m_stream_entries;
 
         bool on_new_socket_feed (const Glib::IOCondition);
         bool on_new_websocket_client (const Glib::IOCondition);
