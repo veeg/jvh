@@ -2,19 +2,7 @@
 
 using namespace jvh;
 
-
-Encoder::Encoder ()
-{
-
-}
-
-Encoder::~Encoder ()
-{
-
-}
-
-uint8_t *
-Encoder::encode_frame (uint8_t *frame)
+Encoder::Encoder (int codec_id, int stream_fd)
 {
     AVCodec *codec;
     AVCodecContext *c = NULL;
@@ -56,5 +44,57 @@ Encoder::encode_frame (uint8_t *frame)
         throw std::runtime_error ("Could not allocate video frame");
     }
 
+    frame->format = c->pix_width;
+    frame->width = c->width;
+    frame->height = c->height;
 
+    // size of frame int bytes
+    m_frame_size = (c->height * c->width):
+}
+
+Encoder::~Encoder ()
+{
+
+}
+
+Encoder::encode_stream_continous ()
+{
+
+}
+
+Encoder::get_next_frames ()
+{
+
+}
+
+Encoder::encode_frame (AVFrame *frame)
+{
+    AVPacket *pkt = av_packet_alloc ();
+    int ret;
+
+    ret = avcodec_send_frame (m_codec_context, frame);
+    if (ret < 0)
+        goto out;
+
+    while (!ret)
+    {
+        ret = avcodec_recieve_packet (m_codec_context, pkt);
+        m_
+    }
+}
+
+
+Encoder::populate_and_enqueue_frame ()
+{
+    AVFrame *frame = avcodec_alloc_frame ();
+
+    frame->width = m_frame_width;
+    frame->height = m_frame_height;
+    frame->format = m_frame_format;
+
+    frame->data[0] =
+    frame->data[1] =
+    frame->data[2] =
+
+    encode_frame(frame);
 }

@@ -11,16 +11,22 @@
 
 namespace jvh
 {
-    // XXX ??? Dont do this
-    typedef int client;
+    typedef enum ssource_type {
+        SSOURCE_FILE = 1,
+        SSOURCE_SOCKET,
+    }ssource_type_t;
 
     //! Structure holds a single entry that is streamable to clients
     struct stream_entry {
         std::string se_name;
         //! If the streaming entry is a file, this filepath is the location of said file
-        std::string se_filepath;
+        union {
+            std::string se_filepath;
+            uint32_t socket_fd;
+        }
         std::string se_format;
         std::string se_codec;
+        ssource_type_t se_type;
     };
 
     class Server
@@ -37,7 +43,7 @@ namespace jvh
         // a message
         std::list<client> get_clientids();
         //! Send a protobuff message to the client on id id
-        int send_message(client id, videostream::ToClient m);
+        int send_message(int client_id, videostream::ToClient m);
 
         void register_stream_entry_file (std::string name, std::string filepath,
                                          std::string format, std::string codec);
@@ -52,9 +58,14 @@ namespace jvh
         std::list<Client*>   m_clients;
         int m_vidsource_fd = -1;
         int m_stream_listen_fd = -1;
+        int m_video_feed_socket = -1;
         pthread_t m_handler_tid;
         pthread_mutex_t m_client_mutex;
         std::map<std::string, struct stream_entry *> m_stream_entries;
+
+        //! Map of input streams - indexed by client id
+        //! to give each client an unique feed
+        std::map<int, std::istream> m_input_streams;
 
         bool on_new_socket_feed (const Glib::IOCondition);
         bool on_new_websocket_client (const Glib::IOCondition);
@@ -68,10 +79,10 @@ namespace jvh
 
     // Input struct to the threat listening
     // to outputs from the video stream
-    typedef struct VidListen {
+    typedef struct video_feed {
         int fd;
         void *server;
-    } VidListen_t;
+    } video_feed_t;
 }
 
 #endif // JVH_SERVER_H

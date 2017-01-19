@@ -2,6 +2,17 @@
 
 namespace jvh
 {
+
+    //! Defines one encode operation
+    struct stream_sequence {
+        int se_frames_per_sequence;
+        uint8_t **se_frames;
+    };
+
+    typedef enum pixel_format {
+        PIX_FMT_YUV =
+    }
+
     class Encoder
     {
     public:
@@ -11,6 +22,12 @@ namespace jvh
         uint8_t *EncodeFrame (uint8_t *frame, int codec_id);
 
     private:
-
+        uint64_t m_frame_size;
+        uint32_t m_frame_height;
+        uint32_t m_frame_width;
+        int64_t m_frame_timestamp;
+        AVFrame *frame;
+        AVCodec *codec;
+        AVCodecContext *m_codec_context = NULL;
     };
 }
