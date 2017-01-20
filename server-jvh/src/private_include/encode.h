@@ -1,5 +1,4 @@
 
-
 namespace jvh
 {
 
@@ -19,8 +18,9 @@ namespace jvh
         Encoder();
         ~Encoder();
 
-        uint8_t *EncodeFrame (uint8_t *frame, int codec_id);
+        void stream_enqueue (uint8_t *data);
 
+        stream_dequeue ();
     private:
         uint64_t m_frame_size;
         uint32_t m_frame_height;
@@ -29,5 +29,7 @@ namespace jvh
         AVFrame *frame;
         AVCodec *codec;
         AVCodecContext *m_codec_context = NULL;
+
+        std::list<PCQueue<uint8_t*>> m_stream_out;
     };
 }

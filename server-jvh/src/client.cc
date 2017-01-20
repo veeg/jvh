@@ -48,7 +48,6 @@ Client::handle_incoming_message (const videostream::FromClient& message)
             entry->set_codec (e.second->se_codec);
         }
 
-
         send_outgoing_message (msg);
         break;
     }
@@ -63,8 +62,8 @@ Client::handle_incoming_message (const videostream::FromClient& message)
         std::cout << "client requested stream entry: " << entry_string << std::endl;
         auto& entry = m_server->stream_entries().at(entry_string);
 
-        std::ifstream file_buffer(entry->se_filepath, std::ifstream::binary);
-        std::cout << "opening file: " << entry->se_filepath << std::endl;
+        auto& stream_queue = entry->se_stream->stream_subscribe();
+
         if (file_buffer.is_open())
         {
             while (true)

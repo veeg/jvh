@@ -49,7 +49,7 @@ Encoder::Encoder (int codec_id, int stream_fd)
     frame->height = c->height;
 
     // size of frame int bytes
-    m_frame_size = (c->height * c->width):
+    m_frame_size = (c->height * c->width);
 }
 
 Encoder::~Encoder ()
@@ -57,13 +57,10 @@ Encoder::~Encoder ()
 
 }
 
-Encoder::encode_stream_continous ()
+PCQueue<uint32_t[]>
+Encoder::stream_subscribe ()
 {
 
-}
-
-Encoder::get_next_frames ()
-{
 
 }
 
@@ -83,8 +80,8 @@ Encoder::encode_frame (AVFrame *frame)
     }
 }
 
-
-Encoder::populate_and_enqueue_frame ()
+void
+Encoder::enqueue_frame (uint8_t *data)
 {
     AVFrame *frame = avcodec_alloc_frame ();
 
@@ -98,3 +95,6 @@ Encoder::populate_and_enqueue_frame ()
 
     encode_frame(frame);
 }
+
+
+
