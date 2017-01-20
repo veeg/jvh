@@ -49,11 +49,18 @@ Encoder::Encoder (int codec_id, int stream_fd)
     frame->height = c->height;
 
     // size of frame int bytes
-    m_frame_size = (c->height * c->width):
+    m_frame_size = (c->height * c->width);
 }
 
 Encoder::~Encoder ()
 {
+
+}
+
+PCQueue<uint32_t[]>
+Encoder::stream_subscribe ()
+{
+
 
 }
 
@@ -73,7 +80,7 @@ Encoder::encode_frame (AVFrame *frame)
     }
 }
 
-Encoder::enqueue_frame ()
+Encoder::enqueue_frame (uint8_t *data)
 {
     AVFrame *frame = avcodec_alloc_frame ();
 

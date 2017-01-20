@@ -233,7 +233,7 @@ Server::on_new_websocket_client (const Glib::IOCondition)
     return true;
 }
 
-std::list<client>
+std::list<uint32_t>
 Server::get_clientids ()
 {
     std::list<client> c;
