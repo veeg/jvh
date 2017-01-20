@@ -57,16 +57,6 @@ Encoder::~Encoder ()
 
 }
 
-Encoder::encode_stream_continous ()
-{
-
-}
-
-Encoder::get_next_frames ()
-{
-
-}
-
 Encoder::encode_frame (AVFrame *frame)
 {
     AVPacket *pkt = av_packet_alloc ();
@@ -79,12 +69,11 @@ Encoder::encode_frame (AVFrame *frame)
     while (!ret)
     {
         ret = avcodec_recieve_packet (m_codec_context, pkt);
-        m_
+        enqueue_outgoing (pkt)
     }
 }
 
-
-Encoder::populate_and_enqueue_frame ()
+Encoder::enqueue_frame ()
 {
     AVFrame *frame = avcodec_alloc_frame ();
 
@@ -98,3 +87,4 @@ Encoder::populate_and_enqueue_frame ()
 
     encode_frame(frame);
 }
+

@@ -225,7 +225,6 @@ Server::on_new_websocket_client (const Glib::IOCondition)
     client->signal_disconnected ().connect
         (sigc::mem_fun (*this, &Server::on_disconnect_websocket_client));
 
-
     // run client mainloop in new thread
     client.listen_async ();
 
@@ -297,7 +296,6 @@ Server::register_stream_entry_socket (std::string name, int fd,
     struct stream_entry *entry = new stream_entry;
 
     entry->se_name = name;
-
 }
 
 const std::map<std::string, struct stream_entry *>
@@ -305,3 +303,4 @@ Server::stream_entries ()
 {
     return m_stream_entries;
 }
+

@@ -1,5 +1,4 @@
 
-
 namespace jvh
 {
 
@@ -19,13 +18,14 @@ namespace jvh
         Encoder();
         ~Encoder();
 
-        uint8_t *EncodeFrame (uint8_t *frame, int codec_id);
+         
 
     private:
         uint64_t m_frame_size;
         uint32_t m_frame_height;
         uint32_t m_frame_width;
         int64_t m_frame_timestamp;
+
         AVFrame *frame;
         AVCodec *codec;
         AVCodecContext *m_codec_context = NULL;

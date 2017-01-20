@@ -62,41 +62,11 @@ Client::handle_incoming_message (const videostream::FromClient& message)
         std::string entry_string = message.select_stream_entry ();
         std::cout << "client requested stream entry: " << entry_string << std::endl;
         auto& entry = m_server->stream_entries().at(entry_string);
+        m_server->subscribe_to_stream (entry_string)
 
         std::ifstream file_buffer(entry->se_filepath, std::ifstream::binary);
         std::cout << "opening file: " << entry->se_filepath << std::endl;
-        if (file_buffer.is_open())
-        {
-            while (true)
-            {
-                // No more to read
-                if (file_buffer.eof())
-                {
-                    break;
-                }
-
-                char buffer[50000];
-                file_buffer.read(buffer, 50000);
-
-                if (file_buffer.fail())
-                {
-                    std::cerr << "fail on file_buffer" << std::endl;
-                    break;
-                }
-                if (file_buffer.gcount () == 0)
-                {
-                    // Nothing more to read. Break out
-                    break;
-                }
-
-                videostream::ToClient msg;
-                auto& payload (*msg.mutable_payload());
-                payload.add_payload(buffer, file_buffer.gcount ());
-
-                //std::cout << "Sending payload..: " << msg.ShortDebugString() << std::endl;
                 send_outgoing_message (msg);
-            }
-        }
     }
     default:
         // Unknown message - do nothing

@@ -55,6 +55,8 @@ namespace jvh
         noPollCtx       *m_nopoll_context;
         noPollConn      *m_nopoll_listener = nullptr;
 
+        Encoder::Encoder m_encoder;
+
         std::list<Client*>   m_clients;
         int m_vidsource_fd = -1;
         int m_stream_listen_fd = -1;
