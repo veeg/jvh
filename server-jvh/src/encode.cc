@@ -60,8 +60,7 @@ Encoder::~Encoder ()
 PCQueue<uint32_t[]>
 Encoder::stream_subscribe ()
 {
-
-
+      
 }
 
 Encoder::encode_frame (AVFrame *frame)
@@ -80,7 +79,7 @@ Encoder::encode_frame (AVFrame *frame)
     }
 }
 
-Encoder::enqueue_frame (uint8_t *data)
+Encoder::enqueue_frame (const uint8_t *data)
 {
     AVFrame *frame = avcodec_alloc_frame ();
 
@@ -88,10 +87,18 @@ Encoder::enqueue_frame (uint8_t *data)
     frame->height = m_frame_height;
     frame->format = m_frame_format;
 
-    frame->data[0] =
-    frame->data[1] =
-    frame->data[2] =
+    avpicture_fill ((AVPicture*)frame, data, m_pix_fmt, m_frame_width, m_frame_height);
 
     encode_frame(frame);
+}
+
+void
+Encoder::enqueue_outgoing (AVPacket *pkt)
+{
+   for (auto iterator = m_stream_out.begin (); iterator != m_stream_out.end ();
+        ++iterator)
+    {
+        *iterator.enqueue (pkt);
+    }
 }
 

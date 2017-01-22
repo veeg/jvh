@@ -25,6 +25,7 @@ namespace jvh
         uint32_t m_frame_height;
         uint32_t m_frame_width;
         int64_t m_frame_timestamp;
+        enum AVPixelFormat m_pix_fmt;
 
         AVFrame *frame;
         AVCodec *codec;

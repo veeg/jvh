@@ -14,15 +14,17 @@ ClientTCP::~ClientTCP ()
     close (m_sock_filedes);
 }
 
-
-ClientTCP::traffic_listen ()
+void
+ClientTCP::send_outgoing_message (const videostream:: ToClient& message)
 {
-    if (select (FD_SETSIZE, &readfds, NULL, NULL, NULL) < 0)
+    std::string str;
+
+    message.SerializeToString (&str);
+    if (write (m_socket, str.c_str (), str.length ()) < 1)
     {
         throw std::runtime_error (strerror (errno));
     }
 }
-
 
 ClientTCP::read_msg ()
 {
