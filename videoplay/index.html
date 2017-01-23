@@ -5,7 +5,7 @@
   <body>
 
     <section>
-      <video id="demo-video" controls autoplay width="320" height="240"></video>
+      <div id="demo-video"/ style="width:320; height:240;"/>
     </section>
 
   </body>
@@ -16,5 +16,6 @@
   <script>
     var video = new ProtoVideoStream("#demo-video");
     video.connectWebSocket("localhost", 8001);
+    video.selectStreamEntry("parrot");
   </script>
 </html>

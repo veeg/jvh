@@ -1,49 +1,66 @@
 class VideoStreamElement {
+
+    // The parent HTML tag that will contain the entire video + overlay
+    private elementParent: any;
+
     // The <video/> container element to stream media source into.
-    private element: any;
+    private elementVideo: any;
+
+    private elementOverlay: any;
+
     // The MediaSource used to feed the video.
     public mediaSource: any;
 
     /*
-     * videoId: The <video/> id to attach videostream
      */
-    public constructor(videoId: string) {
+    public constructor(parentId: string) {
         let self = this;
 
-        console.log("CONSTRUCTING: " + videoId);
+        // This is the parent element. Everything within is cleared
+        // Prepare Video and MediaSource
+        self.elementParent = document.querySelector(parentId);
+        if (self.elementParent === undefined || self.elementParent === null) {
+            throw new Error('Document id not available: ' + parentId);
+        }
+
+        // Clear everything previously declared within
+        self.elementParent.innerHTML = "";
+
+        // Create and append overlay element
+        self.elementOverlay = document.createElement('div');
+        self.elementParent.appendChild(self.elementOverlay);
+
+        // Create and append video element
+        let tmpDiv = document.createElement('div');
+        self.elementParent.appendChild(tmpDiv);
+        self.elementVideo = document.createElement('video');
+        self.elementVideo.setAttribute('autoplay', '');
+        tmpDiv.appendChild(self.elementVideo);
+
         window.MediaSource = window.MediaSource || window.WebKitMediaSource;
         if (!!!window.MediaSource) {
+            // TODO: Populate overlay message
             throw new Error('MediaSource API is not available');
         }
 
-        // Prepare Video and MediaSource
-        self.element = document.querySelector(videoId);
-        console.log(this.videoElement);
-        if (this.element === undefined || this.element === null) {
-            throw new Error('Document id not available: ' + videoId);
-        }
+        // Bind event handlers so 'this' references class instead of event
+        self.errorHandler = self.errorHandler.bind(self);
 
         self.mediaSource = new MediaSource();
-        self.element.src = window.URL.createObjectURL(this.mediaSource);
+        self.elementVideo.src = window.URL.createObjectURL(self.mediaSource);
 
         // Clean-up the error
-        self._errorHandler = function () {
-            self.videoElement.removeEventListener('error', self._errorHandler);
-            // TODO: Destroy all registerd streams
-        }
-        self.videoElement.addEventListener('error', self._errorHandler);
-
-        // XXX; this we cannot do
-        // Handle mediaSource ended
-        this.mediaSource.addEventListener('sourceended', function (e) {
-            console.log("TRACE: SOURCE CLOSED");
-            console.log(e);
-
-            this.sourceBuffer = undefined;
-            this.bufferQueue = [];
-        }, false);
+        self.elementVideo.addEventListener('error', self.errorHandler);
     }
 
+    private errorHandler(e: Event) {
+        let self = this;
+
+        console.log("Media element raised erroenous event");
+        console.log(e);
+        self.elementVideo.removeEventListener('error', self.errorHandler);
+        // TODO: Destroy all registerd streams
+    }
 }
 
 /*
@@ -60,17 +77,36 @@ class VideoStreamSource {
     // The source type string. e.g, 'video/webm; codecs="vorbis, vp8"'
     private sourceType: string;
 
-    public constructor(vse: VideoSourceElement) {
+    // The VideoStreamElement who handles this video source
+    private vse: VideoStreamElement;
+
+    public constructor(vse: VideoStreamElement) {
         let self = this;
 
         self.vse = vse;
+        self.sourceType = 'video/webm; codecs="vp8"';
+
+        // Bind event handlers so 'this' references class instead of event
+        self.openHandler = self.openHandler.bind(self);
 
         // Create the source buffer once media  source is open
-        if (self.vse.mediaSource === 'open') {
+        if (self.vse.mediaSource.readyState === 'open') {
             self.createSourceBuffer();
         } else {
-            // TODO: register addEventListener('sourceopen', _) on mediasource to create source buffer then
+            self.vse.mediaSource.addEventListener('sourceopen', self.openHandler);
         }
+    }
+
+    public appendBuffer(blob: any) {
+        let self = this;
+
+        if (self.bufferQueue === undefined) {
+            console.log("Attempted to appendBuffer to undefined bufferQueue");
+            throw Error("Missing source buffer.");
+        }
+
+        self.bufferQueue.push(blob);
+        self.updateFromBufferQueue();
     }
 
     private createSourceBuffer() {
@@ -82,18 +118,20 @@ class VideoStreamSource {
 
         self.sourceBuffer = self.vse.mediaSource.addSourceBuffer(self.sourceType);
         self.sourceBuffer.addEventListener('updateend', self.updateFromBufferQueue);
+
+        self.bufferQueue = new Array();
+
+        console.log("Created source buffer");
     }
 
     private updateFromBufferQueue() {
         let self = this;
 
-        console.log("TRACE: UpdateFromBufferQueue");
-        if (self.sourceBuffer === undefined) {
-            console.log("sourceBuffer undefined...");
+        if (self.sourceBuffer == null) {
+            // XXX: Why is this happeneing? Vy is the sourceBuffer null/undefined
             return;
         }
         if (self.bufferQueue.length == 0) {
-            console.log("bufferQueue empty");
             return;
         }
         if (self.sourceBuffer.updating) {
@@ -101,27 +139,39 @@ class VideoStreamSource {
             return;
         }
 
+        console.log("Appending buffer to SourceBuffer");
         self.sourceBuffer.appendBuffer(self.bufferQueue.shift());
-
-        // Video not playing - resume it
-        if (self.vse.element.paused) {
-            self.vse.element.play();
-        }
     }
 
+    private openHandler(e: Event) {
+        let self = this;
 
+        self.vse.mediaSource.removeEventListener('sourceopen', self.openHandler);
+        self.createSourceBuffer();
+    }
 }
 
-class VideoStreamProtobufWebSocket {
+class ProtoVideoStream {
 
     // The select video entry to stream from the server
-    selectedVideoEntry: string;
+    public selectedStreamEntry: string;
+
+    //
+    private streamEntries: Map<string, boolean>;
 
     // The active websocket connection for this instance
     private websocket: any;
 
-    public constructor() {
+    // The internal stream element allocated
+    private vse: VideoStreamElement;
+
+    // Internal allocation of a source buffer to feed the video stream element
+    public videoStreamSource: VideoStreamSource;
+
+    public constructor(id: string) {
         let self = this;
+
+        self.vse = new VideoStreamElement(id);
     }
 
     private send (message) {
@@ -129,7 +179,7 @@ class VideoStreamProtobufWebSocket {
     }
 
     public connectWebSocket(address: string, port: number) {
-        let instance = this;
+        let self = this;
         this.websocket = new WebSocket('ws://' + address + ':' + port);
 
         // Handle 'onopen'
@@ -139,60 +189,44 @@ class VideoStreamProtobufWebSocket {
             // Send request for stream entries
             var message = new proto.videostream.FromClient;
             message.setRequestStreamEntries (true);
-            instance.send(message);
-
-            instance.selectVideoEntry("parrot");
+            self.send(message);
         }
 
         // Handle 'onmessage'
         this.websocket.onmessage = function (e) {
-            console.log("websocket on message");
 
             // Update
             let reader = new FileReader();
 
             reader.onload = function ()
             {
-
                 var msg = proto.videostream.ToClient.deserializeBinary (this.result);
                 var messageType = proto.videostream.ToClient.MsgCase;
-
-                console.log(msg);
 
                 switch (msg.getMsgCase())
                 {
                     case messageType.PAYLOAD:
-                        console.log("Payload");
+                        console.log("proto: payload");
 
                         let buffer = new Uint8Array(msg.getPayload().getPayloadList_asU8());
-                        //let buffer = msg.getPayload().getPayloadList_asU8();
-                        console.log(buffer)
-                        instance.bufferQueue.push(buffer);
-                        instance.updateFromBufferQueue();
+                        let payload = msg.getPayload().getPayloadList_asU8();
+                        self.videoStreamSource.appendBuffer(payload[0]);
                         break;
 
                     case messageType.STREAM_ENTRIES:
-                        console.log("Stream entries");
+                        console.log("proto: stream entries");
+                        // TODO: populate array with array from protobuf msg
+                        self.streamEntries = new Map<string, boolean>();
+                        //TEMPORARY
+                        self.streamEntries["parrot"] = true
+
+                        self.changeSelectedVideoEntry();
                         break;
 
                     default:
                         console.log("No handler for message type" + msg.getMsgCase())
                         break;
                 }
-
-                //let msg = proto.videostreampb.ToClient.deserializeBinary (this.result);
-                //let messageType = proto.videostreampb.ToClient.MsgCase;
-
-                //switch (msg.getMsgCase()) {
-
-                //    case messageType.RESPONSE:
-                //        console.log("TYPE: payload");
-                //        instance.bufferQueue.push(buffer);
-                //        instance.updateFromBufferQueue();
-
-                //    default:
-                //        console.log("Received unknown response from Disir Service");
-                //}
             }
 
             reader.readAsArrayBuffer (e.data);
@@ -205,39 +239,43 @@ class VideoStreamProtobufWebSocket {
     }
 
     // Let this be the selctor to choose which entry to request from the server
-    public selectVideoEntry(entryId: string) {
-        this.selectedVideoEntry = entryId;
-        console.log("selectVideoEntry: " + entryId);
+    public selectStreamEntry(entryId: string) {
+        let self = this;
 
-        // XXX: Check if list is retrieved - reset internal state instead maybe?
+        console.log("User selected stream entry: " + entryId);
+        self.selectedStreamEntry = entryId;
 
+        // Only handle the change if we are connected and know the stream entries list
+        if (self.streamEntries === undefined)
+            return;
+
+        self.changeSelectedVideoEntry();
+    }
+
+    private changeSelectedVideoEntry() {
+        let self = this;
+
+        console.log("Changing selected stream entry: " + self.selectedStreamEntry);
         // TODO: Panic if entryId is not in internal list retrieved from server.
 
-        // TODO: Reset current selected entry (if any)
-        // Remove active sourceBuffer (if active)
+        if (self.streamEntries.has(self.selectedStreamEntry) == false) {
+            // TODO: Add text to video overlay
+            //console.log("Stream entry " + self.selectedStreamEntry + " unavailable");
+            //return;
+        }
 
-        // TODO: Get video format and codecs from internal list retrieved from server.
+        // Remove active stream source buffer
+        if (self.videoStreamSource !== undefined) {
+            // TODO: Remove active sourceBuffer (if active)
+        }
 
-        this.bufferQueue = []
-        let instance = this;
+        // TODO: Get codec type from streamEntries and feed this to videostreamsource
+        // XXX: streamEntries should probably be a map
+        self.videoStreamSource = new VideoStreamSource(self.vse);
 
         var message = new proto.videostream.FromClient;
-        message.setSelectStreamEntry("parrot");
-        instance.send(message);
-
-
-        // XXX: Need to manage contents of this block dynamically. Can probably not have multiple
-        // event listeners doing this shit
-        //
-        this.mediaSource.addEventListener('sourceopen', function (e) {
-            console.log("TRACE: SOURCE OPEND");
-            // We can only add a source buffer to the mediaSource once its properly opened
-            instance.sourceBuffer = this.addSourceBuffer('video/webm; codecs="vp8"');
-            instance.sourceBuffer.addEventListener('updateend', function () {
-                console.log("TRACE: UPDATE END");
-                instance.updateFromBufferQueue();
-            });
-        }, false);
+        message.setSelectStreamEntry(self.selectedStreamEntry);
+        self.send(message);
     }
 }
 
