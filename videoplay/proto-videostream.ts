@@ -88,6 +88,9 @@ class VideoStreamSource {
 
         // Bind event handlers so 'this' references class instead of event
         self.openHandler = self.openHandler.bind(self);
+        self.updateendHandler = self.updateendHandler.bind(self);
+        self.errorHandler = self.errorHandler.bind(self);
+        self.abortHandler = self.abortHandler.bind(self);
 
         // Create the source buffer once media  source is open
         if (self.vse.mediaSource.readyState === 'open') {
@@ -106,7 +109,11 @@ class VideoStreamSource {
         }
 
         self.bufferQueue.push(blob);
-        self.updateFromBufferQueue();
+        if (self.sourceBuffer.updating == false) {
+            self.updateFromBufferQueue();
+        } else {
+          console.log("Not issuing updateFromBufferQueue");
+        }
     }
 
     private createSourceBuffer() {
@@ -117,7 +124,8 @@ class VideoStreamSource {
         }
 
         self.sourceBuffer = self.vse.mediaSource.addSourceBuffer(self.sourceType);
-        self.sourceBuffer.addEventListener('updateend', self.updateFromBufferQueue);
+        self.sourceBuffer.mode = 'sequence';
+        self.sourceBuffer.addEventListener('updateend', self.updateendHandler);
 
         self.bufferQueue = new Array();
 
@@ -128,7 +136,7 @@ class VideoStreamSource {
         let self = this;
 
         if (self.sourceBuffer == null) {
-            // XXX: Why is this happeneing? Vy is the sourceBuffer null/undefined
+            throw new Error("SourceBuffer undefined");
             return;
         }
         if (self.bufferQueue.length == 0) {
@@ -148,6 +156,26 @@ class VideoStreamSource {
 
         self.vse.mediaSource.removeEventListener('sourceopen', self.openHandler);
         self.createSourceBuffer();
+    }
+
+    private updateendHandler(e: Event) {
+        let self = this;
+
+        self.updateFromBufferQueue();
+    }
+
+    private errorHandler(e: Event) {
+        let self = this;
+
+        console.log("VideoSource error");
+        console.log(e);
+    }
+
+    private abortHandler(e: Event) {
+        let self = this;
+
+        console.log("VideoSource abort");
+        console.log(e);
     }
 }
 
