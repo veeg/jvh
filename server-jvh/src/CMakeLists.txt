@@ -1,5 +1,3 @@
-
-
 #  Create all protobuf files
 file (GLOB proto_source ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/*.proto)
 set (pcode)
@@ -24,15 +22,18 @@ add_custom_command (
     DEPENDS ${proto_source}
     COMMENT "Generating code from proto files"
 )
-add_custom_target(protoc ALL DEPENDS ${pcode} ${pheaders})
 
+add_custom_target(protoc ALL DEPENDS ${pcode} ${pheaders})
 
 add_executable (videostream
     server.cc
-    #video_source_comm.cc
     client.cc
+    client_tcp.cc
     main.cc
-    #encode.cc
+    encoder.cc
+    stream_encoded.cc
+    queue.cc
+    client_websocket.cc
     ${CMAKE_BINARY_DIR}/protobuf/videostream.pb.cc
 )
 
@@ -46,6 +47,8 @@ target_include_directories (videostream PRIVATE
     ${SIGC++_INCLUDE_DIRS}
 )
 
+MESSAGE (${PROTOBUF_INCLUDE_DIRS})
+
 target_link_libraries (videostream
     ${GTKMM_LIBRARIES}
     ${NOPOLL_LIBRARIES}
@@ -53,5 +56,7 @@ target_link_libraries (videostream
     ${PROTOBUF_LIBRARIES}
     ${SIGC++_LIBRARIES}
 )
+
+MESSAGE (${PROTOBUF_LIBRARIES})
 
 add_dependencies (videostream protoc)

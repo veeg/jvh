@@ -9,6 +9,8 @@
 #include "server.h"
 #include <stdlib.h>
 #include "client_websocket.h"
+#include "client_tcp.h"
+#include <iostream>
 
 using namespace jvh;
 
@@ -95,7 +97,7 @@ Server::serve_socket (const uint32_t port)
 
     bzero ((char*) &serv_addr, sizeof (serv_addr));
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(feed_port);
+    serv_addr.sin_port = htons (port);
     serv_addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof (serv_addr)) < 0)
@@ -132,7 +134,7 @@ Server::on_new_socket (const Glib::IOCondition condition)
 
     Client *client = new ClientTCP (this, new_fd);
 
-    client.listen_async ();
+    client->listen_async ();
 
     add_client (client);
 
@@ -157,7 +159,6 @@ Server::close_websocket ()
 void
 Server::close_feed_socket ()
 {
-    pthread_kill(m_handler_tid, SIGKILL);
     close (m_vidsource_fd);
     close (m_stream_listen_fd);
 }
@@ -203,7 +204,7 @@ Server::on_new_video_source (const Glib::IOCondition)
         return false;
     }
 
-    m_vsource_handler_thread = std::thread (&Server::handle_incoming_feed, this)
+    m_vsource_handler_thread = std::thread (&Server::handle_incoming_feed, this);
 
     return true;
 }
@@ -226,7 +227,7 @@ Server::on_new_websocket_client (const Glib::IOCondition)
         (sigc::mem_fun (*this, &Server::on_disconnect_websocket_client));
 
     // run client mainloop in new thread
-    client.listen_async ();
+    client->listen_async ();
 
     add_client (client);
 
@@ -236,7 +237,7 @@ Server::on_new_websocket_client (const Glib::IOCondition)
 std::list<uint32_t>
 Server::get_clientids ()
 {
-    std::list<client> c;
+    std::list<uint32_t> c;
     auto tot_clients = m_clients.size();
 
     for (auto i = 0; i < tot_clients; i++)
@@ -244,12 +245,6 @@ Server::get_clientids ()
         c.push_front (i);
     }
     return c;
-}
-
-int
-Server::send_message (client id, videostream::ToClient m)
-{
-
 }
 
 void
@@ -282,20 +277,25 @@ Server::register_stream_entry_file (std::string name, std::string filepath,
     struct stream_entry *entry = new stream_entry;
 
     entry->se_name = name;
-    entry->se_filepath = filepath;
     entry->se_format = format;
     entry->se_codec = codec;
-
     m_stream_entries[name] = entry;
 }
 
 void
-Server::register_stream_entry_socket (std::string name, int fd,
-                                      std::string format, std::string codec)
+Server::stream_file_encode (std::string name, std::string filepath,
+                            std::string framesize, std::string format)
 {
     struct stream_entry *entry = new stream_entry;
 
     entry->se_name = name;
+    entry->se_framesize = framesize;
+    entry->se_filepath = filepath;
+    m_stream_entries[name] = entry;
+
+    std::shared_ptr<Stream> stream (new StreamEncoded ());
+
+    m_active_streams[name] = stream;
 }
 
 const std::map<std::string, struct stream_entry *>
@@ -303,4 +303,11 @@ Server::stream_entries ()
 {
     return m_stream_entries;
 }
+
+std::shared_ptr<Stream>
+Server::get_stream (std::string stream_name)
+{
+    return m_active_streams[stream_name];
+}
+
 

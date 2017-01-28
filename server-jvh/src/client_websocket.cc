@@ -1,13 +1,11 @@
 #include "client_websocket.h"
+#include <iostream>
+
+using namespace jvh;
 
 ClientWebSocket::ClientWebSocket (Server *server, noPollConn *ws) :
     Client (server)
 {
-    /*std::cerr << "Constructed new client" << std::endl;
-    Glib::signal_io ().connect (sigc::mem_fun (*this, &Client::on_traffic),
-                                nopoll_conn_socket (ws),
-                                Glib::IO_IN | Glib::IO_HUP);
-    */
     if (nopoll_conn_wait_until_connection_ready(m_nopoll_websocket, 10))
     {
         std::cerr << "wait until connection read yay!" << std::endl;
@@ -37,18 +35,24 @@ ClientWebSocket::send_outgoing_message(const videostream::ToClient& message)
 }
 
 bool
-ClientWebSocket::traffic_listen ()
+ClientWebSocket::incoming_timeout (unsigned int m_sec)
 {
-    if (select (FD_SETSIZE, &readfds, NULL, NULL, NULL) < 0)
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = m_sec;
+
+    if (select (FD_SETSIZE, &readfds, NULL, NULL, &timeout) < 0)
     {
-        throw std::runtime_error (strerror (errno));
+        return false;
     }
+
+    return true;
 
     auto request = nopoll_conn_get_msg (m_nopoll_websocket);
 
     if (request == nullptr)
     {
-        on_hung_up (condition);
+//        on_hung_up (condition);
         return false;
     }
 
@@ -61,3 +65,10 @@ ClientWebSocket::traffic_listen ()
     return true;
 }
 
+void
+ClientWebSocket::read_incoming_message ()
+{
+
+
+
+}

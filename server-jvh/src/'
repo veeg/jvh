@@ -9,11 +9,10 @@ using namespace jvh;
 Client::Client (Server *server) :
     m_server (server)
 {
-
 }
 
 bool
-Client::on_hung_up ()
+Client::on_hung_up (Glib::IOCondition)
 {
     std::cerr << "Disconnecting client trafic" << std::endl;
     m_signal_disconnected (this);
@@ -55,8 +54,7 @@ Client::handle_incoming_message (const videostream::FromClient& message)
         // Lookup stream entry
         std::string entry_string = message.select_stream_entry ();
         std::cout << "client requested stream entry: " << entry_string << std::endl;
-        m_stream = m_server->get_stream (entry_string);
-        m_stream->subscribe (this);
+        auto
     }
     default:
         // Unknown message - do nothing
@@ -71,26 +69,7 @@ Client::handle_traffic ()
 
     while (true)
     {
-        if (incoming_timeout (100))
-        {
-            read_incoming_message ();
-        }
 
-        if (m_stream && !m_stream_queue->empty ())
-        {
-            auto frame = m_stream_queue->front ();
-            m_stream_queue->pop ();
-
-            send_outgoing_message (*frame);
-        }
-        // if stream is shut down and queue is empty
-        else if (m_stream && m_stream_queue->empty ())
-        {
-            if (!m_stream->is_active ())
-            {
-                m_stream->unsubscribe (this);
-            }
-        }
     }
 }
 

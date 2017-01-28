@@ -1,6 +1,8 @@
 #ifndef JVH_CLIENT_WEBSOCKET_H
 #define JVH_CLIENT_WEBSOCKET_H
 
+#include "client.h"
+
 namespace jvh
 {
     class ClientWebSocket : public Client
@@ -11,11 +13,13 @@ namespace jvh
 
         virtual void send_outgoing_message (const videostream::ToClient& message);
 
+        virtual void read_incoming_message ();
+
     private:
         noPollConn *m_nopoll_websocket;
+        fd_set readfds;
 
-        virtual bool on_traffic (Glib::IOCondition condition);
-
+        virtual bool incoming_timeout (unsigned int m_sec);
     };
 }
 

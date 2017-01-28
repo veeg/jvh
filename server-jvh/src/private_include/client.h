@@ -5,7 +5,8 @@
 #include <videostream.pb.h>
 #include <sigc++/signal.h>
 #include <glibmm/main.h>
-
+#include <thread>
+#include "stream.h"
 
 namespace jvh
 {
@@ -15,7 +16,12 @@ namespace jvh
     {
     public:
         Client (Server *server);
-        ~Client() {
+        virtual ~Client () {
+            if (m_stream)
+            {
+                m_stream->unsubscribe (this);
+            }
+
             teardown_thread = true;
             if (m_client_thread.joinable ()) m_client_thread.join ();
         }
@@ -25,22 +31,30 @@ namespace jvh
         }
 
         virtual void send_outgoing_message (const videostream::ToClient& message) = 0;
+
         void handle_incoming_message (const videostream::FromClient& message);
+
+        virtual void read_incoming_message () = 0;
+
         sigc::signal<void, Client*>& signal_disconnected ()
         {
             return m_signal_disconnected;
         }
 
-    private:
+    protected:
         sigc::signal<void, Client*> m_signal_disconnected;
 
+        std::shared_ptr<Stream> m_stream;
+        std::shared_ptr<StreamQueue> m_stream_queue;
         std::thread m_client_thread;
 
         bool teardown_thread = false;
+        virtual bool incoming_timeout (unsigned int m_sec) = 0;
 
         Server *m_server;
-        virtual bool on_traffic (Glib::IOCondition) = 0;
-        bool on_hung_up (Glib::IOCondition);
+        void handle_traffic ();
+        bool pending_receive ();
+        bool on_hung_up ();
     };
 }
 

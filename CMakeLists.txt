@@ -11,7 +11,9 @@ find_package (PkgConfig REQUIRED)
 pkg_check_modules(GTKMM REQUIRED gtkmm-3.0)
 pkg_check_modules(PROTOBUF REQUIRED protobuf)
 pkg_check_modules(NOPOLL REQUIRED nopoll)
-#pkg_check_modules(FFMPEG REQUIRED libavcodec)
+pkg_check_modules(FFMPEG REQUIRED libavcodec libavutil libavformat)
+
+
 set (CMAKE_PREFIX_PATH)
 
 add_subdirectory (server-jvh)

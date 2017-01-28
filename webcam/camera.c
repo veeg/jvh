@@ -10,11 +10,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
-
+#include <assert.h>
 
 #define NUM_THREADS 20
-
-
 
 typedef struct thread_args thread_args_t;
 typedef struct buffer buffer_t;
@@ -27,18 +25,15 @@ struct thread_args {
     int fd;
 };
 
-
 struct buffer {
     void *start;
-    int length;
+    struct v4l2_buffer *buf;
 };
 
 struct queue_node {
     struct v4l2_buffer *buf;
     void *start;
 };
-
-
 
 buffer_t *init_buffers(int fd, int count)
 {
@@ -47,25 +42,23 @@ buffer_t *init_buffers(int fd, int count)
     int i;
     void *buf_start;
 
-    buffers = calloc(sizeof(buffer_t) * count, 1);
-    buf = calloc(sizeof(struct v4l2_buffer) * count, 1);
+    buffers = calloc (sizeof(buffer_t) * count, 1);
 
     for (i = 0; i < count; i++)
     {
-        //memset(&buf, 0, sizeof(struct v4l2_buffer));
+        buf = calloc (sizeof(struct v4l2_buffer), 1);
+        buf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buf->memory = V4L2_MEMORY_MMAP;
+        buf->index = i;
 
-        buf[i].type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        buf[i].memory = V4L2_MEMORY_MMAP;
-        buf[i].index = i;
-
-        if (v4l2_ioctl(fd, VIDIOC_QUERYBUF, &buf[i]) < 0)
+        if (v4l2_ioctl (fd, VIDIOC_QUERYBUF, buf) < 0)
         {
             fprintf(stderr, "Couldn't get buffer info\n");
             return NULL;
         }
-        buffers[i].length = buf[i].length;
-        buf_start = v4l2_mmap(NULL, buf[i].length, PROT_READ | PROT_WRITE,
-                              MAP_SHARED, fd, buf[i].m.offset);
+        //buffers[i].length = buf[i].length;
+        buf_start = v4l2_mmap (NULL, buf->length, PROT_READ | PROT_WRITE,
+                              MAP_SHARED, fd, buf->m.offset);
 
         if (buf_start == MAP_FAILED)
         {
@@ -73,9 +66,10 @@ buffer_t *init_buffers(int fd, int count)
             fprintf(stderr, "Failed to allocate buffer\n");
             return NULL;
         }
-
         buffers[i].start = buf_start;
-        if (v4l2_ioctl(fd, VIDIOC_QBUF, &buf[i]) < 0)
+        buffers[i].buf = buf;
+
+        if (v4l2_ioctl (fd, VIDIOC_QBUF, buf) < 0)
         {
             printf("%s\n", strerror(errno));
             fprintf(stderr, "Cant queue buffer\n");
@@ -86,7 +80,6 @@ buffer_t *init_buffers(int fd, int count)
     return buffers;
 }
 
-
 int init_device(int fd)
 {
     struct v4l2_capability cap;
@@ -95,7 +88,7 @@ int init_device(int fd)
     struct v4l2_streamparm stream;
     struct v4l2_fract frac;
 
-    if (v4l2_ioctl(fd, VIDIOC_QUERYCAP, &cap) < 0)
+    if (v4l2_ioctl (fd, VIDIOC_QUERYCAP, &cap) < 0)
     {
         fprintf(stderr, "Couldn't retrieve capabilites\n");
         return -1;
@@ -130,7 +123,7 @@ int init_device(int fd)
         frac.numerator = 120;
         frac.denominator = 2;
         stream.parm.capture.timeperframe = frac;
-        if (v4l2_ioctl(fd, VIDIOC_S_PARM, &stream) < 0)
+        if (v4l2_ioctl (fd, VIDIOC_S_PARM, &stream) < 0)
         {
             fprintf(stderr, "Cant set stream params\n");
             return -1;
@@ -149,13 +142,13 @@ int init_device(int fd)
     return bufreq.count;
 }
 
-
 void *compute_frame(void *args)
 {
     int i = 0;
-    queue_node_t node;
-    struct v4l2_buffer buf;
+    queue_node_t *node;
     thread_args_t *vals;
+
+    struct v4l2_buffer buf;
 
     buf.memory = V4L2_MEMORY_MMAP;
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -166,20 +159,24 @@ void *compute_frame(void *args)
 
     while(1)
     {
+
         if (v4l2_ioctl(vals->fd, VIDIOC_DQBUF, &buf) < 0)
         {
+            printf("INDEX : %d\n", buf.index);
             printf("%s\n", strerror(errno));
             fprintf(stderr, "Cant dequeue buffer\n");
+
             return NULL;
+        } else if (buf.flags & V4L2_BUF_FLAG_ERROR) {
+            printf("SATAN HELLER DA\n");
         }
 
-        node.buf = &buf;
-        node.start = vals->buffer[buf.index].start;
-        vals->queue[i] = &node;
-
-        printf("DEQUE : %d\n", i);
+        memcpy(vals->buffer[buf.index].buf, &buf, sizeof(struct v4l2_buffer));
+        printf("deque : %d\n", i);
+        vals->queue[i] = &vals->buffer[buf.index];
 
         i = (i + 1) % vals->count;
+        assert (i < 20 && i >= 0);
     }
 
     return NULL;
@@ -187,9 +184,12 @@ void *compute_frame(void *args)
 
 void start_stream(int fd, int count)
 {
-    queue_node_t *current;
+    buffer_t *current;
+    //struct v4l2_buffer *current;
+    //buffer_t buf;
+    //void *current;
     FILE *f;
-    int type, ret;
+    int type, ret, k;
     int i = 0, d;
     buffer_t *buffers;
     void *address;
@@ -197,19 +197,17 @@ void start_stream(int fd, int count)
     pthread_t thread;
     thread_args_t *args;
 
-    args    = calloc(sizeof(thread_args_t), 1);
-    queue   = calloc(sizeof(void*) * count, 1);
-    buffers = init_buffers(fd, count);
+    args    = calloc (sizeof(thread_args_t), 1);
+    queue   = calloc (sizeof(void*) * count, 1);
+    buffers = init_buffers (fd, count);
 
     type    = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    if (v4l2_ioctl(fd, VIDIOC_STREAMON, &type) < 0)
+    if (v4l2_ioctl (fd, VIDIOC_STREAMON, &type) < 0)
     {
         fprintf(stderr, "Cant start stream\n");
         return;
     }
 
-    //current.memory = V4L2_MEMORY_MMAP;
-    //current.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
     printf("COUNT : %d\n", count);
 
@@ -219,33 +217,56 @@ void start_stream(int fd, int count)
     args->fd        = fd;
 
     f = fopen("./test2", "w");
-    ret = pthread_create(&thread, NULL, compute_frame, (void*) args);
+    if (f == NULL) {
+        fprintf(stderr, "Can't open file\n");
+        return;
+    }
 
-    while(1)
+    ret = pthread_create (&thread, NULL, compute_frame, (void*) args);
+    if (ret != 0) {
+        fprintf(stderr, "Can't start thread\n");
+        return;
+    }
+
+    while (1)
     {
+
         if (queue[i] != NULL)
         {
-            current = queue[i];
-            printf("LEN : %d\n", current->buf->length);
-            //printf("LEN : %d\n", current->buf->index);
+            current = (buffer_t*)queue[i];
+
+
             d = fwrite(current->start, 1, current->buf->length, f);
-           // printf("%p\n", current->start);
-            printf("Wrote : %d\n", d);
-            //printf("%s\n", strerror(errno));
+            if (d != current->buf->length) {
+                printf("%s\n", strerror(errno));
+                return;
+            }
+
+
             queue[i] = NULL;
-            if (v4l2_ioctl(fd, VIDIOC_QBUF, current->buf) < 0)
+
+
+            current->buf->memory = V4L2_MEMORY_MMAP;
+            current->buf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+
+            if (v4l2_ioctl (fd, VIDIOC_QBUF, current->buf) < 0)
             {
+                printf("I : %d\n", i);
+                printf("BUF INDEX : %d\n", current->buf->index);
                 printf("%s\n", strerror(errno));
                 fprintf(stderr, "Cant queue buffer\n");
                 return;
+            } else if (current->buf->flags & V4L2_BUF_FLAG_ERROR) {
+                printf("SATAN HELLER DA\n");
             }
-            printf("QUE : %d\n", i);
+            printf("enq : %d\n", i);
             i = (i + 1) % count;
-
+            assert (i < 20);
         }
     }
 
-    if (v4l2_ioctl(fd, VIDIOC_STREAMOFF, &type) < 0)
+    if (v4l2_ioctl (fd, VIDIOC_STREAMOFF, &type) < 0)
     {
         fprintf(stderr, "Cant shut down stream stream\n");
         return;
@@ -257,14 +278,14 @@ int main(int argc, char **argv)
 {
     int fd, count;
 
-    fd = v4l2_open("/dev/video0", O_RDWR);
+    fd = v4l2_open ("/dev/video0", O_RDWR);
     if (fd < 0)
     {
         fprintf(stderr, "Cant find device\n");
         return 0;
     }
 
-    count = init_device(fd);
+    count = init_device (fd);
 
-    start_stream(fd, count);
+    start_stream (fd, count);
 }

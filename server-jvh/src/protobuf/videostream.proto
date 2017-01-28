@@ -10,6 +10,15 @@ message StreamEntries {
     repeated StreamEntry entries = 1;
 }
 
+message FromFeed {
+    oneof msg {
+        string name = 1;
+        int32 pixel_format = 2;
+        int32 frame_height = 3;
+        int32 frame_width = 4;
+    }
+}
+
 message StreamEntry {
     string name = 1;
     string format = 2;
@@ -20,7 +29,6 @@ message StreamEntry {
 //! to a client
 message ToClient {
     // TODO: Add status enum
-
     oneof msg {
         Payload payload = 1;
         StreamEntries stream_entries = 2;
