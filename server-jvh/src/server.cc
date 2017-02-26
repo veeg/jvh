@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include "server.h"
+#include <sys/stat.h>
 #include <stdlib.h>
 #include "client_websocket.h"
 #include "client_tcp.h"
@@ -25,6 +26,14 @@ Server::~Server ()
 {
     m_vsource_handler_thread.join ();
     nopoll_ctx_unref (m_nopoll_context);
+    if (m_stream_listen_fd)
+    {
+        close (m_stream_listen_fd);
+    }
+    if (m_video_feed_socket)
+    {
+        close (m_video_feed_socket);
+    }
 }
 
 void
@@ -84,7 +93,7 @@ Server::video_feed_listen_setup (const uint32_t feed_port)
 }
 
 void
-Server::serve_socket (const uint32_t port)
+Server::serve_socket_tcp (const uint32_t port)
 {
     int sockfd;
     struct sockaddr_in serv_addr, cli_addr;
@@ -112,13 +121,13 @@ Server::serve_socket (const uint32_t port)
 
     m_video_feed_socket = sockfd;
 
-    Glib::signal_io ().connect (sigc::mem_fun (*this, &Server::on_new_socket),
+    Glib::signal_io ().connect (sigc::mem_fun (*this, &Server::on_new_socket_tcp),
                                 sockfd,
                                 Glib::IO_IN | Glib::IO_HUP);
 }
 
 bool
-Server::on_new_socket (const Glib::IOCondition condition)
+Server::on_new_socket_tcp (const Glib::IOCondition condition)
 {
     struct sockaddr addr;
     socklen_t addrlen = sizeof (struct sockaddr);
@@ -179,40 +188,56 @@ Server::close_sockets ()
 bool
 Server::on_new_video_source (const Glib::IOCondition)
 {
-    int readfd;
+    int new_conn;
     socklen_t clilen;
     struct sockaddr_in cli_addr;
     int rc;
 
-    // We only allow one connction on the video input
-    // source port
-    if (m_vidsource_fd != -1)
-    {
-        std::cerr << "Rejecting new video source input connection."
-                  << std::endl;
-        return false;
-    }
-
-    std::cerr << "vstream websocket connected."
-              << std::endl;
-
-    readfd = accept (m_stream_listen_fd, (struct sockaddr*)&cli_addr, &clilen);
-    if (readfd < 0)
+    new_conn = accept (m_stream_listen_fd, (struct sockaddr*)&cli_addr, &clilen);
+    if (new_conn < 0)
     {
         std::cerr << "unable to accept new connection."
                   << std::endl;
         return false;
     }
 
-    m_vsource_handler_thread = std::thread (&Server::handle_incoming_feed, this);
+    std::shared_ptr<NetStream> stream(new NetStream (new_conn));
+
+    stream->signal_disconnected ().connect
+        (sigc::mem_fun (*this, &Server::on_disconnect_stream));
+
+    stream->run_threaded ();
+
+    // Waits until the NetStream retrieves
+    // information about the stream context
+    auto stream_entry = stream->wait_for_stream_context ();
+
+    m_stream_entries[stream_entry->se_name] = stream_entry;
+
+    std::shared_ptr<Stream> s (stream);
+
+    m_active_streams[stream_entry->se_name] = s;
 
     return true;
 }
 
 void
-Server::handle_incoming_feed ()
+Server::on_disconnect_stream (Stream *stream)
 {
+    auto iter = m_active_streams.begin ();
 
+    // XXX: please remove stream_entry aswell
+    while (iter != m_active_streams.end ())
+    {
+        // Comparing smart pointer
+        // to raw pointer
+        if (iter->second.get () == stream)
+        {
+            m_active_streams.erase (iter);
+            break;
+        }
+        iter++;
+    }
 }
 
 bool
@@ -283,17 +308,18 @@ Server::register_stream_entry_file (std::string name, std::string filepath,
 }
 
 void
-Server::stream_file_encode (std::string name, std::string filepath,
-                            std::string framesize, std::string format)
+Server::stream_file_encode (std::string name, std::string filepath, std::string format,
+                            uint32_t width, uint32_t height)
 {
     struct stream_entry *entry = new stream_entry;
 
     entry->se_name = name;
-    entry->se_framesize = framesize;
     entry->se_filepath = filepath;
+    entry->se_width = width;
+    entry->se_height = height;
     m_stream_entries[name] = entry;
 
-    std::shared_ptr<Stream> stream (new StreamEncoded ());
+    std::shared_ptr<Stream> stream (new StreamEncoded (entry));
 
     m_active_streams[name] = stream;
 }

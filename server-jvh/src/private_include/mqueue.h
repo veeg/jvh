@@ -15,11 +15,11 @@ namespace jvh
 
         //! Enqueue a message; no
         //! bounds to number of elements
-        void enqueue (const T& elem);
+        void enqueue (const T elem);
 
         //! Dequeue - blocks if
         //! queue is empty
-        T& dequeue ();
+        T dequeue ();
         uint64_t size ();
 
     private:
@@ -29,16 +29,17 @@ namespace jvh
     };
 template <typename T>
 void
-MQueue<T>::enqueue (const T& elem)
+MQueue<T>::enqueue (const T elem)
 {
     std::unique_lock<std::mutex> lock (m_qlock);
 
     m_queue.push (elem);
+    lock.unlock();
     m_cv.notify_one ();
 }
 
 template <typename T>
-T&
+T
 MQueue<T>::dequeue ()
 {
     std::unique_lock<std::mutex> lock(m_qlock);
@@ -46,8 +47,9 @@ MQueue<T>::dequeue ()
     {
         m_cv.wait (lock);
     }
-    auto& elem = m_queue.back ();
+    auto elem = m_queue.front ();
     m_queue.pop ();
+    return elem;
 }
 
 template <typename T>

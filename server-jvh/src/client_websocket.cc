@@ -47,14 +47,13 @@ ClientWebSocket::incoming_timeout (unsigned int m_sec)
     }
 
     return true;
+}
 
+void
+ClientWebSocket::read_incoming_message ()
+{
     auto request = nopoll_conn_get_msg (m_nopoll_websocket);
-
-    if (request == nullptr)
-    {
 //        on_hung_up (condition);
-        return false;
-    }
 
     videostream::FromClient message;
     message.ParseFromString ((const char *) nopoll_msg_get_payload (request));
@@ -62,13 +61,4 @@ ClientWebSocket::incoming_timeout (unsigned int m_sec)
     handle_incoming_message (message);
 
     nopoll_msg_unref (request);
-    return true;
-}
-
-void
-ClientWebSocket::read_incoming_message ()
-{
-
-
-
 }

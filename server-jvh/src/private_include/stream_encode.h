@@ -15,20 +15,17 @@ extern "C" {
 
 namespace jvh
 {
-
-
     //! Childclass which encodes raw video
     class StreamEncoded : public Stream
     {
     public:
         //! \brief
-        StreamEncoded ();
+        StreamEncoded (struct stream_entry *entry);
         ~StreamEncoded ();
 
-        //! \brief starts stream encode to run in a separate thread
-        virtual void start (struct stream_entry *entry);
-
-        void read_from_video_source (const char *filepath, Encoder *encoder);
+        //! \brief subscribe to stream
+        //!
+        //!
         virtual std::shared_ptr<StreamQueue> subscribe (void *client);
 
         virtual void unsubscribe (void *client);
@@ -37,16 +34,31 @@ namespace jvh
     private:
         void shutdown_stream ();
 
-        //! used to lock the queue map
-        std::mutex m_qlock;
+
+        std::thread start_unique_feed (std::shared_ptr<StreamQueue> outgoing);
 
         //! \brief populates all outgoing queues with pkt
-        void enqueue_outgoing (AVPacket *pkt);
+        //!
+        //! Invoked by encoder to enqueue processed frames
+        //! \param outgoing is bound to the callback
+        //! sent to the encoder and will be unique per client
+        //!
+        void enqueue_outgoing (AVPacket *pkt, std::shared_ptr<StreamQueue> outgoing);
+
+        void read_from_video_source (const char *filepath, Encoder *encoder);
+        virtual bool is_active ();
+
+        virtual void start (struct stream_entry *entry) {}
+
+        struct stream_entry *m_stream_entry;
 
         //! Such that we know how large each
         //! chunk needs to be
+        //! used to lock the queue map
+        std::mutex m_qlock;
         uint32_t m_frame_size;
-
+        std::thread m_read_thread;
+        std::vector<std::thread> m_read_threads;
         std::map<void*, std::shared_ptr<StreamQueue>> m_outgoing_streams;
     };
 }

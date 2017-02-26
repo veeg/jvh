@@ -19,6 +19,7 @@ namespace jvh
         virtual ~Client () {
             if (m_stream)
             {
+                // unsubscribe from stream, if any.
                 m_stream->unsubscribe (this);
             }
 
@@ -26,6 +27,7 @@ namespace jvh
             if (m_client_thread.joinable ()) m_client_thread.join ();
         }
 
+        //! Starts communication logic in separate thread
         void listen_async () {
             m_client_thread = std::thread (&Client::handle_traffic, this);
         }

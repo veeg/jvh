@@ -8,6 +8,12 @@
 
 namespace jvh
 {
+    enum stream_type {
+        STREAM_TYPE_FILE = 0,
+        STREAM_TYPE_FILE_ENCODE,
+        STREAM_TYPE_ENCODE_FEED,
+    };
+
     //! Structure holds a single entry that is streamable to clients
     //! @param se_strem has functionality to dequeue frames
     struct stream_entry {
@@ -19,7 +25,7 @@ namespace jvh
         std::string se_framesize;
         uint32_t    se_height;
         uint32_t    se_width;
-        std::atomic<bool> se_active;
+        enum stream_type se_type;
     };
 
     typedef std::queue<std::shared_ptr<videostream::ToClient>> StreamQueue;
@@ -30,8 +36,6 @@ namespace jvh
         Stream () {}
         virtual ~Stream () {}
 
-        virtual void start (struct stream_entry *entry) = 0;
-
         //! \brief Subscribe to the given stream
         //!
         //! dequeue messages until stream is no longer
@@ -40,7 +44,7 @@ namespace jvh
 
         virtual void unsubscribe (void *client) = 0;
 
-        bool is_active () { return m_stream_shutdown; };
+        virtual bool is_active ();
 
     protected:
         std::atomic<bool> m_stream_shutdown;

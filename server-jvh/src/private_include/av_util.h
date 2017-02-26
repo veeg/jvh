@@ -3,23 +3,21 @@
 
 extern "C" {
     #include <libavutil/avutil.h>
+    #include <libavcodec/avcodec.h>
+    #include <linux/videodev2.h>
 }
 
 namespace jvh
 {
-    std::string av_error_desc (int errnum)
-    {
-        char buf[500];
+        struct fmt_map {
+            enum AVPixelFormat ff_fmt;
+            enum AVCodecID codec_id;
+            uint32_t v4l2_fmt;
+        };
 
-        auto ret = av_strerror (errnum, buf, 500);
+        std::string av_error_desc (int errnum);
 
-        if (ret < 0)
-        {
-            return std::string ("Unknown error");
-        }
-
-        return std::string (buf);
-    }
+        enum AVPixelFormat ff_fmt_v4l2ff(uint32_t v4l2_fmt, enum AVCodecID codec_id);
 }
 
 #endif

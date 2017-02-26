@@ -12,7 +12,7 @@ endforeach(protofile)
 set (PROTOC_BIN protoc)
 
 add_custom_command (
-  OUTPUT ${pcode} ${pheaders} ${CMAKE_BINARY_DIR}/protobuf/videostreampb.js
+    OUTPUT ${pcode} ${pheaders} ${CMAKE_BINARY_DIR}/protobuf/videostreampb.js
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/protobuf
     COMMAND ${PROTOC_BIN}
     --proto_path=${CMAKE_CURRENT_SOURCE_DIR}/protobuf
@@ -23,18 +23,27 @@ add_custom_command (
     COMMENT "Generating code from proto files"
 )
 
+add_custom_target(
+    generate-proto
+    DEPENDS ${CMAKE_BINARY_DIR}/protobuf/videostream.pb.cc
+)
+
+set (SHARED_LIBS ${CMAKE_SOURCE_DIR}/shared)
+
 add_custom_target(protoc ALL DEPENDS ${pcode} ${pheaders})
 
-add_executable (videostream
+add_library (videostream SHARED
     server.cc
     client.cc
     client_tcp.cc
     main.cc
     encoder.cc
+    net_stream.cc
     stream_encoded.cc
     queue.cc
     client_websocket.cc
     ${CMAKE_BINARY_DIR}/protobuf/videostream.pb.cc
+    ${SHARED_LIBS}/prototcp.cc
 )
 
 target_include_directories (videostream PRIVATE
@@ -45,9 +54,8 @@ target_include_directories (videostream PRIVATE
     ${FFMPEG_INCLUDE_DIRS}
     ${PROTOBUF_INCLUDE_DIRS}
     ${SIGC++_INCLUDE_DIRS}
+    ${SHARED_LIBS}/include/
 )
-
-MESSAGE (${PROTOBUF_INCLUDE_DIRS})
 
 target_link_libraries (videostream
     ${GTKMM_LIBRARIES}
@@ -57,6 +65,5 @@ target_link_libraries (videostream
     ${SIGC++_LIBRARIES}
 )
 
-MESSAGE (${PROTOBUF_LIBRARIES})
-
 add_dependencies (videostream protoc)
+

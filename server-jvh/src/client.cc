@@ -9,7 +9,7 @@ using namespace jvh;
 Client::Client (Server *server) :
     m_server (server)
 {
-
+    m_stream = NULL;
 }
 
 bool
@@ -48,18 +48,18 @@ Client::handle_incoming_message (const videostream::FromClient& message)
     }
     case videostream::FromClient::kSelectStreamEntry:
     {
-        // TEST: Just read the file inline in chunks and send chunks one after another
-        // until the while file is read. That way, we will effectively block the server from
-        // handling anything until it either throws an exception or finished serving it all
-
         // Lookup stream entry
         std::string entry_string = message.select_stream_entry ();
         std::cout << "client requested stream entry: " << entry_string << std::endl;
+
+        // XXX: return error if stream does not exists
         m_stream = m_server->get_stream (entry_string);
-        m_stream->subscribe (this);
+        m_stream_queue = m_stream->subscribe (this);
+        break;
     }
     default:
         // Unknown message - do nothing
+        std::cerr << "Which message are you trying to send?" << std::endl;
         break;
     }
 }
@@ -73,6 +73,7 @@ Client::handle_traffic ()
     {
         if (incoming_timeout (100))
         {
+            std::cerr << "Incoming message" << std::endl;
             read_incoming_message ();
         }
 
@@ -89,9 +90,9 @@ Client::handle_traffic ()
             if (!m_stream->is_active ())
             {
                 m_stream->unsubscribe (this);
+                m_stream = NULL;
             }
         }
     }
 }
-
 

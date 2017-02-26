@@ -10,12 +10,27 @@ message StreamEntries {
     repeated StreamEntry entries = 1;
 }
 
+message StreamContext {
+    // v4l2 pix_fmt enum
+    uint32 pixel_format = 1;
+    int32 frame_height = 2;
+    int32 frame_width = 3;
+    int32 frame_buffer_size = 4;
+}
+
 message FromFeed {
     oneof msg {
-        string name = 1;
-        int32 pixel_format = 2;
-        int32 frame_height = 3;
-        int32 frame_width = 4;
+        StreamContext stream_context = 1;
+        Payload payload = 2;
+    }
+}
+
+message ToFeed {
+    oneof msg {
+        bool request_stream_context = 1;
+        bool ready_to_receive_data = 2;
+        bool frame_size_mismatched = 3;
+        string context_error_string = 4;
     }
 }
 

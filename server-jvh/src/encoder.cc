@@ -1,6 +1,8 @@
 #include "encoder.h"
+#include <assert.h>
 #include <iostream>
-#include "av_util.h"
+
+#include <fstream>
 
 using namespace jvh;
 
@@ -12,9 +14,12 @@ Encoder::~Encoder ()
 
 // TODO: pixel format of input data
 Encoder::Encoder (uint32_t frame_width, uint32_t frame_height,
-                  AVCodecID output_codec)
+                  enum AVPixelFormat fmt, AVCodecID output_codec)
 {
     AVCodec *codec;
+
+    avcodec_register_all ();
+    av_register_all ();
 
     codec = avcodec_find_encoder (output_codec);
     if (codec == NULL)
@@ -28,15 +33,16 @@ Encoder::Encoder (uint32_t frame_width, uint32_t frame_height,
         throw std::runtime_error ("Could not allocate context");
     }
 
-    // Change this please
-    m_codec_ctx->bit_rate = 400000;
-
     m_codec_ctx->width = frame_width;
     m_codec_ctx->height = frame_height;
-
+    m_codec_ctx->bit_rate = 40000;
     m_codec_ctx->gop_size = 10;
+    m_codec_ctx->time_base = (AVRational){1,25};
     m_codec_ctx->max_b_frames = 1;
-    m_codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+    m_codec_ctx->time_base.den = 25;
+    m_codec_ctx->time_base.num = 1;
+    m_codec_ctx->codec_type = AVMEDIA_TYPE_VIDEO;
+    m_codec_ctx->pix_fmt = fmt;
 
     if (avcodec_open2 (m_codec_ctx, codec, NULL) < 0 )
     {
@@ -45,12 +51,14 @@ Encoder::Encoder (uint32_t frame_width, uint32_t frame_height,
     }
 
     // Determine how many bytes a frame is composed of
-    m_frame_size = av_image_get_buffer_size (m_codec_ctx->pix_fmt,
-                                       m_codec_ctx->width, m_codec_ctx->height, 1);
+    m_frame_size = av_image_get_buffer_size (m_codec_ctx->pix_fmt, m_codec_ctx->width,
+                                             m_codec_ctx->height, 1);
     if (m_frame_size < 0)
     {
         throw std::runtime_error ( av_error_desc (m_frame_size));
     }
+
+    m_drain.store (false);
 }
 
 uint32_t
@@ -72,18 +80,26 @@ Encoder::start (std::function<void(AVPacket *pkt)> enqueue_packet)
 }
 
 AVFrame*
-Encoder::populate_frame (uint8_t *data)
+Encoder::populate_frame (AVFrame *frame, uint8_t *data)
 {
-    AVFrame *frame = av_frame_alloc ();
-
-    frame->width = m_codec_ctx->width;
-    frame->height = m_codec_ctx->height;;
-    frame->format = m_codec_ctx->pix_fmt;
+    int ret;
 
     // Populate the frame structure according to its format
-    av_image_fill_arrays (frame->data, frame->linesize, (const uint8_t *)data, m_codec_ctx->pix_fmt,
-                          m_codec_ctx->width, m_codec_ctx->height, 1);
+    ret = av_image_fill_arrays (frame->data, frame->linesize, (const uint8_t *)data,
+                                       m_codec_ctx->pix_fmt, m_codec_ctx->width,
+                                       m_codec_ctx->height, 1);
+
+    // ret should be equal to
+    // the image frame size
+    assert (ret == m_frame_size);
+
     return frame;
+}
+
+void
+Encoder::drain (void)
+{
+    m_drain = true;
 }
 
 void
@@ -92,36 +108,58 @@ Encoder::encode (std::function<void(AVPacket *pkt)> enqueue_packet)
     std::cerr << "In stream encode"
               << std::endl;
 
-    AVPacket *pkt;
-    AVFrame *frame;
-    int ret, still_encoding;
-
-    while (true)
+    AVFrame *frame = av_frame_alloc ();
+    if (frame == NULL)
     {
-        auto raw_frame = m_frame_queue.dequeue ();
-        frame = populate_frame (raw_frame);
+        throw std::runtime_error ("Could not allocate frame");
+    }
 
-        delete[] raw_frame;
+    AVPacket pkt;
+    int ret, still_encoding;
+    uint64_t pts = 0;
+
+    frame->format = m_codec_ctx->pix_fmt;
+    frame->width = m_codec_ctx->width;
+    frame->height = m_codec_ctx->height;
+
+    // run loop until the queue is empty and the encoder
+    // has been signaled for drainage
+    while (m_drain.load () == false || m_frame_queue.size () != 0)
+    {
+        auto data = m_frame_queue.dequeue ();
+        assert (data != NULL);
+
+        populate_frame (frame, data);
+
+        // Dictates at which
+        // time the frame is shown
+        frame->pts = pts++;
 
         ret = avcodec_send_frame (m_codec_ctx, frame);
         if (ret < 0)
-            goto err;
+        {
+            // XXX: Currently just loggin the erro
+            std::cerr << av_error_desc (ret)
+                      << std::endl;
+        }
 
-        pkt = av_packet_alloc ();
+        pkt.size = 0;
+        pkt.data = NULL;
+
         // Loop until packet is encoded
+        still_encoding = 0;
         while (!still_encoding)
         {
-            still_encoding = avcodec_receive_packet (m_codec_ctx, pkt);
+            still_encoding = avcodec_receive_packet (m_codec_ctx, &pkt);
             if (!still_encoding)
             {
-                enqueue_packet (pkt);
-                av_frame_free (&frame);
+                assert (still_encoding == 0);
+                enqueue_packet (&pkt);
+                av_packet_unref (&pkt);
             }
         }
-        av_packet_unref (pkt);
     }
-err:
-    std::cerr << "stream encode exit"
-              << std::endl;
+    std::cerr << "Exiting encode: " << m_drain.load () << std::endl;
+    av_frame_free (&frame);
 }
 

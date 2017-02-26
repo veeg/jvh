@@ -8,6 +8,7 @@
 #include <glibmm/main.h>
 #include "client.h"
 #include "stream_encode.h"
+#include "net_stream.h"
 
 namespace jvh
 {
@@ -20,9 +21,11 @@ namespace jvh
         ~Server ();
 
         void serve_websocket (const uint32_t client_port);
-        void stream_file_encode (std::string name, std::string filepath,
-                                 std::string framesize, std::string format);
-        void serve_feed_socket (const uint32_t feed_port);
+        void stream_file_encode (std::string name, std::string filepath, std::string format,
+                                uint32_t width, uint32_t height);
+
+        void serve_socket_tcp (const uint32_t feed_port);
+
         void close_sockets ();
         void start_listening ();
 
@@ -55,15 +58,17 @@ namespace jvh
         int m_vidsource_fd = -1;
         int m_stream_listen_fd = -1;
         int m_video_feed_socket = -1;
+
         pthread_mutex_t m_client_mutex;
 
         std::map<std::string, struct stream_entry *> m_stream_entries;
 
         bool on_new_socket_feed (const Glib::IOCondition);
-        bool on_new_socket (const Glib::IOCondition);
+        bool on_new_socket_tcp (const Glib::IOCondition);
         bool on_new_websocket_client (const Glib::IOCondition);
         void video_feed_listen_setup (const uint32_t feed_port);
         bool on_new_video_source (const Glib::IOCondition);
+        void on_disconnect_stream (Stream *stream);
 
         void serve_socket (const uint32_t port);
         void close_feed_socket ();
