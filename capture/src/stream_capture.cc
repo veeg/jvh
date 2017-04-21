@@ -4,7 +4,6 @@
 
 using namspace capture;
 
-
 StreamComm::StreamComm (uint32_t port)
 {
     int sockfd;
@@ -28,7 +27,6 @@ StreamComm::StreamComm (uint32_t port)
     }
 
     m_protoTCP = new ProtoTCP(socket);
-
 }
 
 StreamComm::~StreamComm ()

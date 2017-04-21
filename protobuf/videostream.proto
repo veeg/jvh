@@ -16,6 +16,7 @@ message StreamContext {
     int32 frame_height = 2;
     int32 frame_width = 3;
     int32 frame_buffer_size = 4;
+    string stream_name = 5;
 }
 
 message FromFeed {

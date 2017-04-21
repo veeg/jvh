@@ -1,7 +1,7 @@
-using namespace jvh;
-
+#include "av_util.h"
+//
 // Taken from ffmpeg 3.1.7
-const struct fmt_map ff_fmt_conversion_table[] = {
+const struct jvh::fmt_map ff_fmt_conversion_table[] = {
     //ff_fmt              codec_id              v4l2_fmt
     { AV_PIX_FMT_YUV420P, AV_CODEC_ID_RAWVIDEO, V4L2_PIX_FMT_YUV420  },
     { AV_PIX_FMT_YUV420P, AV_CODEC_ID_RAWVIDEO, V4L2_PIX_FMT_YVU420  },
@@ -35,7 +35,8 @@ const struct fmt_map ff_fmt_conversion_table[] = {
 };
 
 // Taken from ffmpeg 3.1.7
-enum AVPixelFormat ff_fmt_v4l2ff(uint32_t v4l2_fmt, enum AVCodecID codec_id)
+enum AVPixelFormat
+jvh::ff_fmt_v4l2ff (uint32_t v4l2_fmt, enum AVCodecID codec_id)
 {
     int i;
 
@@ -48,7 +49,9 @@ enum AVPixelFormat ff_fmt_v4l2ff(uint32_t v4l2_fmt, enum AVCodecID codec_id)
 
     return AV_PIX_FMT_NONE;
 }
-std::string av_error_desc (int errnum)
+
+std::string
+jvh::av_error_desc (int errnum)
 {
     char buf[500];
 

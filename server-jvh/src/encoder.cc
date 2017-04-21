@@ -12,7 +12,6 @@ Encoder::~Encoder ()
     avcodec_free_context (&m_codec_ctx);
 }
 
-// TODO: pixel format of input data
 Encoder::Encoder (uint32_t frame_width, uint32_t frame_height,
                   enum AVPixelFormat fmt, AVCodecID output_codec)
 {
@@ -86,8 +85,8 @@ Encoder::populate_frame (AVFrame *frame, uint8_t *data)
 
     // Populate the frame structure according to its format
     ret = av_image_fill_arrays (frame->data, frame->linesize, (const uint8_t *)data,
-                                       m_codec_ctx->pix_fmt, m_codec_ctx->width,
-                                       m_codec_ctx->height, 1);
+                                m_codec_ctx->pix_fmt, m_codec_ctx->width,
+                                m_codec_ctx->height, 1);
 
     // ret should be equal to
     // the image frame size
@@ -129,6 +128,8 @@ Encoder::encode (std::function<void(AVPacket *pkt)> enqueue_packet)
         auto data = m_frame_queue.dequeue ();
         assert (data != NULL);
 
+        // XXX: remember to free data
+        // at some point
         populate_frame (frame, data);
 
         // Dictates at which
@@ -138,7 +139,7 @@ Encoder::encode (std::function<void(AVPacket *pkt)> enqueue_packet)
         ret = avcodec_send_frame (m_codec_ctx, frame);
         if (ret < 0)
         {
-            // XXX: Currently just loggin the erro
+            // XXX: Currently just logging the error
             std::cerr << av_error_desc (ret)
                       << std::endl;
         }
@@ -153,7 +154,6 @@ Encoder::encode (std::function<void(AVPacket *pkt)> enqueue_packet)
             still_encoding = avcodec_receive_packet (m_codec_ctx, &pkt);
             if (!still_encoding)
             {
-                assert (still_encoding == 0);
                 enqueue_packet (&pkt);
                 av_packet_unref (&pkt);
             }

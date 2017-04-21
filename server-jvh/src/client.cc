@@ -69,11 +69,10 @@ Client::handle_traffic ()
 {
     std::cerr << "Started new client thread" << std::endl;
 
-    while (true)
+    while (teardown_thread == false)
     {
         if (incoming_timeout (100))
         {
-            std::cerr << "Incoming message" << std::endl;
             read_incoming_message ();
         }
 

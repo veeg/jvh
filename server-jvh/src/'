@@ -1,6 +1,14 @@
 #  Create all protobuf files
 
+
+add_custom_target(
+    generate-proto
+    DEPENDS ${CMAKE_BINARY_DIR}/protobuf/videostream.pb.cc
+)
+
 set (SHARED_LIBS ${CMAKE_SOURCE_DIR}/shared)
+
+
 
 set(VIDEOSTREAM videostream)
 
@@ -15,12 +23,9 @@ add_library (${VIDEOSTREAM} SHARED
     queue.cc
     client_websocket.cc
     av_util.cc
+    ${CMAKE_BINARY_DIR}/protobuf/videostream.pb.cc
     ${SHARED_LIBS}/prototcp.cc
 )
-
-set (VIDEOSTREAM_INCLUDE_DIRS
-    ${CMAKE_CURRENT_SOURCE_DIR}/public_include/
-    )
 
 target_include_directories (${VIDEOSTREAM} PRIVATE
     ${CMAKE_BINARY_DIR}/protobuf/
@@ -34,15 +39,17 @@ target_include_directories (${VIDEOSTREAM} PRIVATE
 )
 
 target_include_directories(${VIDEOSTREAM} PUBLIC
-        ${VIDEOSTREAM_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/public_include/
     )
 
 
 target_link_libraries (${VIDEOSTREAM}
-    videostream_proto
     ${GTKMM_LIBRARIES}
     ${NOPOLL_LIBRARIES}
     ${FFMPEG_LIBRARIES}
+    ${PROTOBUF_LIBRARIES}
     ${SIGC++_LIBRARIES}
 )
+
+add_dependencies (${VIDEOSTREAM} protoc)
 

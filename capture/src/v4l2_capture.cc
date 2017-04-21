@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <assert.h>
+#include <videostream.pb.h>
 
 #define NUM_THREADS 20
 
@@ -80,6 +81,7 @@ int init_device(int fd)
     struct v4l2_requestbuffers bufreq;
     struct v4l2_streamparm stream;
     struct v4l2_fract frac;
+    videostream::ToClient lol;
 
     if (v4l2_ioctl (fd, VIDIOC_QUERYCAP, &cap) < 0)
     {

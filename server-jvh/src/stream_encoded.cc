@@ -74,7 +74,6 @@ StreamEncoded::read_from_video_source (const char *filepath, Encoder *encoder)
 
         encoder->send_frame (chunk);
     }
-
 out:
     encoder->drain ();
 }
@@ -85,7 +84,7 @@ StreamEncoded::start_unique_feed (std::shared_ptr<StreamQueue> outgoing)
     Encoder *encoder = new Encoder (m_stream_entry->se_width,
                                     m_stream_entry->se_height,
                                     AV_PIX_FMT_YUV420P,
-                                    AV_CODEC_ID_MPEG1VIDEO);
+                                    AV_CODEC_ID_VP8);
 
     auto fp = std::bind (&StreamEncoded::enqueue_outgoing,
                          this, std::placeholders::_1, outgoing);
@@ -110,8 +109,6 @@ StreamEncoded::enqueue_outgoing (AVPacket *pkt, std::shared_ptr<StreamQueue> out
 {
    std::shared_ptr<videostream::ToClient> msg(new videostream::ToClient);
 
-   std::cerr << "enqueueing " << std::endl;
-
    auto& payload (*msg->mutable_payload ());
    payload.add_payload (pkt->data, pkt->size);
 
@@ -122,7 +119,6 @@ std::shared_ptr<StreamQueue>
 StreamEncoded::subscribe (void *client)
 {
     std::unique_lock<std::mutex> lock (m_qlock);
-    std::cerr << "In Subscribe" << std::endl;
 
     auto queue = std::make_shared<StreamQueue> ();
 

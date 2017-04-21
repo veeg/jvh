@@ -1,6 +1,8 @@
 #ifndef JVH_AV_UTIL_H
 #define JVH_AV_UTIL_H
 
+#include <iostream>
+
 extern "C" {
     #include <libavutil/avutil.h>
     #include <libavcodec/avcodec.h>
@@ -9,15 +11,14 @@ extern "C" {
 
 namespace jvh
 {
-        struct fmt_map {
-            enum AVPixelFormat ff_fmt;
-            enum AVCodecID codec_id;
-            uint32_t v4l2_fmt;
-        };
+    struct fmt_map {
+        enum AVPixelFormat ff_fmt;
+        enum AVCodecID codec_id;
+        uint32_t v4l2_fmt;
+    };
 
-        std::string av_error_desc (int errnum);
-
-        enum AVPixelFormat ff_fmt_v4l2ff(uint32_t v4l2_fmt, enum AVCodecID codec_id);
+    std::string av_error_desc (int errnum);
+    enum AVPixelFormat ff_fmt_v4l2ff (uint32_t v4l2_fmt, enum AVCodecID codec_id);
 }
 
 #endif

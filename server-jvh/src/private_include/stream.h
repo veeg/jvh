@@ -44,7 +44,7 @@ namespace jvh
 
         virtual void unsubscribe (void *client) = 0;
 
-        virtual bool is_active ();
+        virtual bool is_active () = 0;
 
     protected:
         std::atomic<bool> m_stream_shutdown;

@@ -9,7 +9,7 @@ extern "C" {
 
 using namespace jvh;
 
-NetStream::NetStream (int socket)
+NetStream::NetStream (int socket, Server *server) : m_server (server)
 {
     m_pbcomm = new ProtoTCP (socket);
 }
@@ -17,6 +17,12 @@ NetStream::NetStream (int socket)
 
 NetStream::~NetStream ()
 {
+    stream_shutdown = true;
+
+    if (m_stream_thread.joinable ())
+    {
+        m_stream_thread.join ();
+    }
     if (m_pbcomm)
     {
         delete m_pbcomm;
@@ -30,6 +36,10 @@ NetStream::~NetStream ()
 bool
 NetStream::on_stream_hung_up ()
 {
+    if (m_encoder)
+    {
+        m_encoder->drain ();
+    }
     m_signal_disconnected (this);
 }
 
@@ -47,6 +57,12 @@ NetStream::alloc_encoder (int width, int height, enum AVPixelFormat fmt)
         // they fucked up
         return false;
     }
+
+    auto enqueue_callback = std::bind (&NetStream::enqueue_to_all_subcriptions,
+                                       this, std::placeholders::_1);
+
+    m_encoder->start (enqueue_callback);
+
     return true;
 }
 
@@ -73,6 +89,12 @@ NetStream::handle_incoming_message (videostream::FromFeed& message)
     // XXX: should only be allowed once
     case videostream::FromFeed::kStreamContext:
     {
+        if (m_encoder != nullptr)
+        {
+            response.set_context_error_string ("Context is already set");
+            break;
+        }
+
         auto& stream_context = message.stream_context ();
 
         auto height = stream_context.frame_height ();
@@ -106,13 +128,16 @@ NetStream::handle_incoming_message (videostream::FromFeed& message)
         }
 
         auto se = new stream_entry;
+
+        se->se_name = stream_context.stream_name ();
         se->se_height = height;
         se->se_width = width;
+        se->se_format = av_get_pix_fmt_name (libav_pix_fmt);
 
+        m_server->register_stream_entry (se, STREAM_TYPE_ENCODE_FEED);
 
         response.set_ready_to_receive_data (true);
 
-        m_pbcomm->send (response);
         break;
     }
     case videostream::FromFeed::kPayload:
@@ -123,23 +148,18 @@ NetStream::handle_incoming_message (videostream::FromFeed& message)
             m_encoder == NULL)
         {
             response.set_context_error_string ("Cannot recieve payload");
-            m_pbcomm->send (response);
             break;
         }
 
         m_encoder->send_frame (payload_to_frame (message));
-        break;
+        return;
     }
     default:
         std::cerr << "Which message is this? " << std::endl;
         break;
     }
-}
 
-struct stream_entry*
-NetStream::wait_for_stream_context ()
-{
-
+    m_pbcomm->send (response);
 }
 
 void
@@ -165,15 +185,38 @@ NetStream::handle_traffic ()
     }
 }
 
+void
+NetStream::enqueue_to_all_subcriptions (AVPacket *pkt)
+{
+    std::shared_ptr<videostream::ToClient> msg (new videostream::ToClient);
+
+    auto& payload (*msg->mutable_payload ());
+    payload.add_payload (pkt->data, pkt->size);
+
+    std::unique_lock<std::mutex> lock (m_sublock);
+
+    for (auto& queue: m_subscriptions)
+    {
+        queue.second->push (msg);
+    }
+}
+
 std::shared_ptr<StreamQueue>
 NetStream::subscribe (void *client)
 {
+    std::unique_lock<std::mutex> lock (m_sublock);
 
+    auto queue = std::make_shared<StreamQueue> ();
 
+    m_subscriptions[client] = queue;
+
+    return queue;
 }
 
 void
 NetStream::unsubscribe (void *client)
 {
+    std::unique_lock<std::mutex> lock (m_sublock);
 
+    m_subscriptions.erase (client);
 }

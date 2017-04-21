@@ -5,24 +5,32 @@
 #include <sigc++/signal.h>
 #include "stream.h"
 #include "encoder.h"
+#include "server.h"
+#include "net_stream.h"
 
 namespace jvh
 {
     class Server;
     class NetStream : public Stream
     {
-    friend class Server;
+
     public:
-        NetStream (int socket);
+        NetStream (int socket, Server *server);
         ~NetStream ();
 
         virtual std::shared_ptr<StreamQueue> subscribe (void *client);
 
         virtual void unsubscribe (void *client);
 
+        virtual bool is_active () {}
+
         sigc::signal<void, Stream*>& signal_disconnected ()
         {
             return m_signal_disconnected;
+        }
+        void run_threaded ()
+        {
+            m_stream_thread = std::thread (&NetStream::handle_traffic, this);
         }
     protected:
         sigc::signal<void, Stream*> m_signal_disconnected;
@@ -30,9 +38,15 @@ namespace jvh
         ProtoTCP *m_pbcomm;
         Encoder *m_encoder;
         std::thread m_stream_thread;
+        std::mutex m_sublock;
         std::atomic<bool> stream_shutdown;
+        std::map<void *, std::shared_ptr<StreamQueue>> m_subscriptions;
 
         struct stream_entry *m_stream_context;
+
+        //! Callback used by the encoder to send
+        //! encoded frames
+        void enqueue_to_all_subcriptions (AVPacket *pkt);
 
         //! Reads the entire Payload form message and copies it to
         //! a uint8_t array
@@ -47,13 +61,6 @@ namespace jvh
         bool on_stream_hung_up ();
 
         void handle_traffic ();
-
-        void run_threaded ()
-        {
-            m_stream_thread = std::thread (&NetStream::handle_traffic, this);
-        }
-
-        struct stream_entry *wait_for_stream_context ();
     };
 }
 

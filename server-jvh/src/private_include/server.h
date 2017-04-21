@@ -5,36 +5,38 @@
 #include <list>
 #include <memory>
 #include <map>
+#include <videostream.pb.h>
 #include <glibmm/main.h>
+#include <thread>
+#include <mutex>
 #include "client.h"
-#include "stream_encode.h"
-#include "net_stream.h"
 
 namespace jvh
 {
-
-
     class Server
     {
+    friend class NetStream;
+
     public:
         Server ();
         ~Server ();
 
         void serve_websocket (const uint32_t client_port);
+
         void stream_file_encode (std::string name, std::string filepath, std::string format,
                                 uint32_t width, uint32_t height);
 
         void serve_socket_tcp (const uint32_t feed_port);
 
         void close_sockets ();
-        void start_listening ();
 
-        // Get list of client identifiers and then use the id to send the respective client
-        // a message
-        std::list<uint32_t> get_clientids();
+
+        void start_listening ();
 
         //! Send a protobuff message to the client on id id
         int send_message(int client_id, videostream::ToClient m);
+
+        void serve_streams_incoming (const uint32_t port);
 
         std::shared_ptr<Stream> get_stream (std::string stream_name);
 
@@ -54,20 +56,24 @@ namespace jvh
         //! file or socket
         std::thread m_vsource_handler_thread;
         std::list<Client*>   m_clients;
+        std::vector<int> m_open_sockets;
+        std::mutex m_stream_entries_lock;
+        std::mutex m_client_lock;
 
-        int m_vidsource_fd = -1;
-        int m_stream_listen_fd = -1;
-        int m_video_feed_socket = -1;
+        int m_stream_listen_fd;
+        int m_video_feed_fd;
 
         pthread_mutex_t m_client_mutex;
 
         std::map<std::string, struct stream_entry *> m_stream_entries;
 
-        bool on_new_socket_feed (const Glib::IOCondition);
-        bool on_new_socket_tcp (const Glib::IOCondition);
+        bool on_new_video_feed (const Glib::IOCondition);
+        void remove_stream_entry (struct stream_entry *entry);
+        void add_stream_entry (struct stream_entry *entry);
+        void register_stream_entry (struct stream_entry *entry, enum stream_type stream_type);
+        bool on_new_tcp_client (const Glib::IOCondition);
         bool on_new_websocket_client (const Glib::IOCondition);
-        void video_feed_listen_setup (const uint32_t feed_port);
-        bool on_new_video_source (const Glib::IOCondition);
+
         void on_disconnect_stream (Stream *stream);
 
         void serve_socket (const uint32_t port);

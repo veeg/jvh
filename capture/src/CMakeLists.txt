@@ -1,15 +1,8 @@
 set(SHARED_LIBS ${CMAKE_SOURCE_DIR}/shared)
 
-## Stupid workaround for cmake to find protofiles
-set_source_files_properties(
-     ${CMAKE_BINARY_DIR}/protobuf/videostream.pb.cc
-     PROPERTIES GENERATED TRUE
-)
-
 add_executable (capture
     "v4l2_capture.cc"
     ${SHARED_LIBS}/prototcp.cc
-    ${CMAKE_BINARY_DIR}/protobuf/videostream.pb.cc
 )
 
 # XXX: please find another way to
@@ -23,8 +16,7 @@ target_include_directories (capture PRIVATE
 
 target_link_libraries (capture
     ${PROTOBUF_LIBRARIES}
+    videostream_proto
     ${V4L2_LIBRARIES}
 )
-
-add_dependencies (capture generate-proto)
 

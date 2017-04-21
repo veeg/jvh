@@ -16,10 +16,7 @@ pkg_check_modules(V4L2 REQUIRED libv4l2)
 
 set (CMAKE_PREFIX_PATH)
 
+add_subdirectory(protobuf)
 add_subdirectory (server-jvh)
-set_source_files_properties(
-        ${CMAKE_BINARY_DIR}/protobuf/videostream.pb.cc
-        PROPERTIES GENERATED TRUE
-)
 add_subdirectory (capture)
-
+add_subdirectory(run)

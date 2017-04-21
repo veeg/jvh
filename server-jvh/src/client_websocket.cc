@@ -13,7 +13,6 @@ ClientWebSocket::ClientWebSocket (Server *server, noPollConn *ws) :
 
     FD_ZERO (&readfds);
     FD_SET(nopoll_conn_socket (ws), &readfds);
-
 }
 
 ClientWebSocket::~ClientWebSocket ()
@@ -55,8 +54,15 @@ ClientWebSocket::read_incoming_message ()
     auto request = nopoll_conn_get_msg (m_nopoll_websocket);
 //        on_hung_up (condition);
 
+    if (request == nullptr)
+    {
+        on_hung_up ();
+        return;
+    }
+
     videostream::FromClient message;
-    message.ParseFromString ((const char *) nopoll_msg_get_payload (request));
+    message.ParseFromString ((const char *)nopoll_msg_get_payload (request));
+    std::cerr << "Heia" << std::endl;
 
     handle_incoming_message (message);
 

@@ -46,7 +46,8 @@ namespace jvh
         void enqueue_outgoing (AVPacket *pkt, std::shared_ptr<StreamQueue> outgoing);
 
         void read_from_video_source (const char *filepath, Encoder *encoder);
-        virtual bool is_active ();
+
+        virtual bool is_active () {}
 
         virtual void start (struct stream_entry *entry) {}
 

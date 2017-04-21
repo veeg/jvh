@@ -8,10 +8,13 @@
 #include <stdio.h>
 #include "server.h"
 #include <sys/stat.h>
+#include "stream_encode.h"
 #include <stdlib.h>
 #include "client_websocket.h"
 #include "client_tcp.h"
+#include "client.h"
 #include <iostream>
+#include "net_stream.h"
 
 using namespace jvh;
 
@@ -24,15 +27,10 @@ Server::Server ()
 
 Server::~Server ()
 {
-    m_vsource_handler_thread.join ();
     nopoll_ctx_unref (m_nopoll_context);
-    if (m_stream_listen_fd)
+    for (auto socket: m_open_sockets)
     {
-        close (m_stream_listen_fd);
-    }
-    if (m_video_feed_socket)
-    {
-        close (m_video_feed_socket);
+        close (socket);
     }
 }
 
@@ -59,7 +57,7 @@ Server::serve_websocket (const uint32_t client_port)
 }
 
 void
-Server::video_feed_listen_setup (const uint32_t feed_port)
+Server::serve_streams_incoming (const uint32_t feed_port)
 {
     int sockfd;
     struct sockaddr_in serv_addr, cli_addr;
@@ -81,13 +79,11 @@ Server::video_feed_listen_setup (const uint32_t feed_port)
         throw std::runtime_error ("Failed to bind socket on port ");
     }
 
-    // Only caring about the one connection
-    // however it may be smarter to listen on more
-    listen (sockfd, 1);
+    listen (sockfd, 5);
 
-    m_stream_listen_fd = sockfd;
+    m_open_sockets.push_back (sockfd);
 
-    Glib::signal_io ().connect (sigc::mem_fun (*this, &Server::on_new_video_source),
+    Glib::signal_io ().connect (sigc::mem_fun (*this, &Server::on_new_video_feed),
                                 sockfd,
                                 Glib::IO_IN | Glib::IO_HUP);
 }
@@ -119,22 +115,21 @@ Server::serve_socket_tcp (const uint32_t port)
     // however it may be smarter to listen on more
     listen (sockfd, 1);
 
-    m_video_feed_socket = sockfd;
+    m_open_sockets.push_back (sockfd);
 
-    Glib::signal_io ().connect (sigc::mem_fun (*this, &Server::on_new_socket_tcp),
+    Glib::signal_io ().connect (sigc::mem_fun (*this, &Server::on_new_tcp_client),
                                 sockfd,
                                 Glib::IO_IN | Glib::IO_HUP);
 }
 
 bool
-Server::on_new_socket_tcp (const Glib::IOCondition condition)
+Server::on_new_tcp_client (const Glib::IOCondition condition)
 {
     struct sockaddr addr;
     socklen_t addrlen = sizeof (struct sockaddr);
     int new_fd;
 
-
-    new_fd = accept (m_video_feed_socket, (struct sockaddr *)&addr, &addrlen);
+    new_fd = accept (m_video_feed_fd, (struct sockaddr *)&addr, &addrlen);
     if (new_fd < 0)
     {
         // Something more descriptive maybe?
@@ -168,13 +163,12 @@ Server::close_websocket ()
 void
 Server::close_feed_socket ()
 {
-    close (m_vidsource_fd);
-    close (m_stream_listen_fd);
 }
 
 void
 Server::close_sockets ()
 {
+    // XXX: cleanup all dangling threads and class references
     if (m_mainloop)
     {
         m_mainloop->quit ();
@@ -183,10 +177,8 @@ Server::close_sockets ()
     close_feed_socket ();
 }
 
-//! TODO: teardown function if feed disconnects such that
-//! it can reconnect if necessary
 bool
-Server::on_new_video_source (const Glib::IOCondition)
+Server::on_new_video_feed (const Glib::IOCondition)
 {
     int new_conn;
     socklen_t clilen;
@@ -201,22 +193,16 @@ Server::on_new_video_source (const Glib::IOCondition)
         return false;
     }
 
-    std::shared_ptr<NetStream> stream(new NetStream (new_conn));
+    NetStream *stream = new NetStream (new_conn, this);
 
     stream->signal_disconnected ().connect
         (sigc::mem_fun (*this, &Server::on_disconnect_stream));
 
     stream->run_threaded ();
 
-    // Waits until the NetStream retrieves
-    // information about the stream context
-    auto stream_entry = stream->wait_for_stream_context ();
-
-    m_stream_entries[stream_entry->se_name] = stream_entry;
-
     std::shared_ptr<Stream> s (stream);
 
-    m_active_streams[stream_entry->se_name] = s;
+    m_active_streams["stream_encode"] = s;
 
     return true;
 }
@@ -226,7 +212,7 @@ Server::on_disconnect_stream (Stream *stream)
 {
     auto iter = m_active_streams.begin ();
 
-    // XXX: please remove stream_entry aswell
+    // XXX: please remove stream_entry as well
     while (iter != m_active_streams.end ())
     {
         // Comparing smart pointer
@@ -259,19 +245,6 @@ Server::on_new_websocket_client (const Glib::IOCondition)
     return true;
 }
 
-std::list<uint32_t>
-Server::get_clientids ()
-{
-    std::list<uint32_t> c;
-    auto tot_clients = m_clients.size();
-
-    for (auto i = 0; i < tot_clients; i++)
-    {
-        c.push_front (i);
-    }
-    return c;
-}
-
 void
 Server::on_disconnect_websocket_client (Client *client)
 {
@@ -282,17 +255,16 @@ Server::on_disconnect_websocket_client (Client *client)
 void
 Server::remove_client(Client *client)
 {
-    pthread_mutex_lock (&m_client_mutex);
+    std::unique_lock<std::mutex> lock (m_client_lock);
     m_clients.remove (client);
-    pthread_mutex_unlock (&m_client_mutex);
+    delete client;
 }
 
 void
 Server::add_client(Client *client)
 {
-    pthread_mutex_lock (&m_client_mutex);
+    std::unique_lock<std::mutex> lock (m_client_lock);
     m_clients.push_back (client);
-    pthread_mutex_unlock (&m_client_mutex);
 }
 
 void
@@ -322,6 +294,40 @@ Server::stream_file_encode (std::string name, std::string filepath, std::string 
     std::shared_ptr<Stream> stream (new StreamEncoded (entry));
 
     m_active_streams[name] = stream;
+}
+
+void
+Server::register_stream_entry (struct stream_entry *entry, enum stream_type stream_type)
+{
+    struct stream_entry *e = new struct stream_entry;
+
+    switch(stream_type)
+    {
+    case STREAM_TYPE_ENCODE_FEED:
+        e->se_name = entry->se_name;
+        e->se_type = stream_type;
+        e->se_format = entry->se_format;
+        e->se_height = entry->se_height;
+        e->se_width = entry->se_width;
+        break;
+    }
+    add_stream_entry (e);
+}
+
+void
+Server::add_stream_entry (struct stream_entry *entry)
+{
+    std::unique_lock<std::mutex> lock (m_stream_entries_lock);
+
+    m_stream_entries[entry->se_name] = entry;
+}
+
+void
+Server::remove_stream_entry (struct stream_entry *entry)
+{
+    std::unique_lock<std::mutex> lock (m_stream_entries_lock);
+
+    m_stream_entries.erase (entry->se_name);
 }
 
 const std::map<std::string, struct stream_entry *>
