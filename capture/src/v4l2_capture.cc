@@ -12,6 +12,7 @@
 #include <pthread.h>
 #include <assert.h>
 #include <videostream.pb.h>
+#include "stream_capture.h"
 
 #define NUM_THREADS 20
 
@@ -74,14 +75,13 @@ buffer_t *init_buffers(int fd, int count)
     return buffers;
 }
 
-int init_device(int fd)
+int init_device(int fd, videostream::StreamContext& info)
 {
     struct v4l2_capability cap;
     struct v4l2_format format;
     struct v4l2_requestbuffers bufreq;
     struct v4l2_streamparm stream;
     struct v4l2_fract frac;
-    videostream::ToClient lol;
 
     if (v4l2_ioctl (fd, VIDIOC_QUERYCAP, &cap) < 0)
     {
@@ -134,6 +134,17 @@ int init_device(int fd)
         return -1;
     }
 
+
+
+    info.set_pixel_format(V4L2_PIX_FMT_YUV420);
+    info.set_frame_height(format.fmt.pix.height);
+    info.set_frame_width(format.fmt.pix.width);
+    info.set_frame_buffer_size(format.fmt.pix.sizeimage);
+    info.set_stream_name("Awesome motherfucking stream");
+
+
+    printf("%d\n", V4L2_PIX_FMT_YUV420);
+
     return bufreq.count;
 }
 
@@ -175,16 +186,16 @@ void *compute_frame(void *args)
     return NULL;
 }
 
-void start_stream(int fd, int count)
+void start_stream(int fd, int count, capture::StreamComm *stream)
 {
     buffer_t *current;
-    FILE *f;
-    int type, ret, d;
-    int i = 0;
     buffer_t *buffers;
-    void **queue;
     pthread_t thread;
     thread_args_t *args;
+    void **queue;
+    int type, ret, d;
+    int i = 0;
+    //FILE *f;
 
     args    = (thread_args_t*) calloc (sizeof(thread_args_t), 1);
     assert (args != NULL);
@@ -205,10 +216,13 @@ void start_stream(int fd, int count)
     args->count     = count;
     args->queue     = queue;
     args->fd        = fd;
-
+    
+    
+    //Used for local testing
+    /* 
     f = fopen("./test2", "w");
     assert (f != NULL);
-
+    */
     ret = pthread_create (&thread, NULL, compute_frame, (void*) args);
     assert (ret == 0);
 
@@ -217,12 +231,16 @@ void start_stream(int fd, int count)
         if (queue[i] != NULL)
         {
             current = (buffer_t*)queue[i];
+            /*
             d = fwrite(current->start, 1, current->buf->bytesused, f);
             if (d != current->buf->bytesused) {
                 printf("%s\n", strerror(errno));
                 return;
             }
-
+            */
+            
+            stream->send_frame ((char*) current->start, current->buf->bytesused);
+            
             queue[i] = NULL;
 
             if (v4l2_ioctl (fd, VIDIOC_QBUF, current->buf) < 0)
@@ -250,6 +268,10 @@ void start_stream(int fd, int count)
 int main(int argc, char **argv)
 {
     int fd, count;
+    
+    uint32_t port;
+
+    port = 8002;
 
     fd = v4l2_open ("/dev/video0", O_RDWR);
     if (fd < 0)
@@ -258,7 +280,14 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    count = init_device (fd);
+    capture::StreamComm* comm = new capture::StreamComm ();
+    videostream::StreamContext info;
 
-    start_stream (fd, count);
+    comm->connect_to_server(port, "129.242.22.74");
+
+    count = init_device (fd, info);
+
+    comm->send_capture_context(info);
+
+    start_stream (fd, count, comm);
 }

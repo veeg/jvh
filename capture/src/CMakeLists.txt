@@ -2,6 +2,7 @@ set(SHARED_LIBS ${CMAKE_SOURCE_DIR}/shared)
 
 add_executable (capture
     "v4l2_capture.cc"
+    "stream_capture.cc"
     ${SHARED_LIBS}/prototcp.cc
 )
 
@@ -10,6 +11,7 @@ add_executable (capture
 target_include_directories (capture PRIVATE
     ${SHARED_LIBS}/include/
     ${CMAKE_BINARY_DIR}/protobuf/
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${PROTOBUF_INCLUDE_DIRS}
     ${V4L2_INCLUDE_DIRS}
 )
